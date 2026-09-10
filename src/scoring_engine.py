@@ -1,0 +1,149 @@
+"""
+ScoringEngine
+=============
+
+Turns a validated CompanyProfile into an AssessmentResults object.
+
+Method (Chapter 4, scoring methodology):
+
+  1. Re-code reverse-worded items so that 5 always means "more ready".
+  2. Average the re-coded items within each factor -> a 1-5 factor mean.
+  3. Normalise each factor mean to 0-100.
+  4. Combine factor scores using the weights in ScoreConfiguration to produce
+     the overall readiness score.
+  5. Assign a readiness tier from the score bands.
+  6. Select strengths, factor-level barriers and item-level (subfactor) gaps.
+
+The engine holds no state between assessments and performs no I/O, which is
+what satisfies the Reliability requirement: identical input always produces
+identical output.
+"""
+
+from __future__ import annotations
+
+from typing import Dict, List
+
+from .assessment_results import AssessmentResults, FactorScore, ItemScore
+from .company_profile import CompanyProfile
+from . import score_configuration as cfg
+
+
+class ScoringEngine:
+    """Applies ScoreConfiguration to a CompanyProfile."""
+
+    def __init__(self, configuration=cfg) -> None:
+        # Injecting the configuration module keeps the engine testable against
+        # an alternative weighting without editing this class.
+        self.cfg = configuration
+
+    # ------------------------------------------------------------------
+
+    def score(self, profile: CompanyProfile, validate: bool = True) -> AssessmentResults:
+        """
+        Score a company profile.
+
+        Parameters
+        ----------
+        validate:
+            Left on by default as a safety net. The dashboard validates before
+            calling, per the Session Diagram, so in the running application
+            this check should never be the thing that catches a problem.
+        """
+        if validate:
+            profile.raise_if_invalid()
+
+        factor_scores: Dict[str, FactorScore] = {}
+
+        for factor in self.cfg.FACTORS:
+            item_scores = self._score_items(factor, profile)
+            mean_likert = sum(i.adjusted_value for i in item_scores) / len(item_scores)
+            score_0_100 = self.cfg.normalise_likert(mean_likert)
+            band = self.cfg.band_for_score(score_0_100)
+
+            factor_scores[factor.id] = FactorScore(
+                factor_id=factor.id,
+                name=factor.name,
+                weight=factor.weight,
+                mean_likert=mean_likert,
+                score=score_0_100,
+                band_label=band.label,
+                weighted_contribution=score_0_100 * factor.weight,
+                item_scores=item_scores,
+            )
+
+        overall = sum(f.weighted_contribution for f in factor_scores.values())
+        overall_band = self.cfg.band_for_score(overall)
+
+        return AssessmentResults(
+            overall_score=overall,
+            readiness_tier=overall_band.label,
+            tier_description=overall_band.description,
+            factor_scores=factor_scores,
+            strengths=self._select_strengths(factor_scores),
+            barriers=self._select_barriers(factor_scores),
+            item_barriers=self._select_item_barriers(factor_scores),
+            context=profile.context_summary(),
+        )
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+
+    def _score_items(self, factor, profile: CompanyProfile) -> List[ItemScore]:
+        scores: List[ItemScore] = []
+        for item in factor.items:
+            raw = int(profile.responses[item.id])
+            adjusted = self.cfg.apply_reverse(raw, item.reverse)
+            scores.append(
+                ItemScore(
+                    item_id=item.id,
+                    text=item.text,
+                    factor_id=factor.id,
+                    factor_name=factor.name,
+                    raw_value=raw,
+                    adjusted_value=adjusted,
+                    reverse=item.reverse,
+                    score=self.cfg.normalise_likert(adjusted),
+                )
+            )
+        return scores
+
+    def _select_strengths(self, factor_scores: Dict[str, FactorScore]) -> List[FactorScore]:
+        strong = [f for f in factor_scores.values() if f.score >= self.cfg.STRENGTH_THRESHOLD]
+        strong.sort(key=lambda f: f.score, reverse=True)
+        return strong[: self.cfg.MAX_STRENGTHS]
+
+    def _select_barriers(self, factor_scores: Dict[str, FactorScore]) -> List[FactorScore]:
+        weak = [f for f in factor_scores.values() if f.score < self.cfg.BARRIER_THRESHOLD]
+        # Ranked by weight-adjusted gap, so the barriers listed first are the
+        # ones whose improvement would move the overall score the most.
+        weak.sort(key=lambda f: f.impact, reverse=True)
+        return weak[: self.cfg.MAX_BARRIERS]
+
+    def _select_item_barriers(self, factor_scores: Dict[str, FactorScore]) -> List[ItemScore]:
+        """
+        Select the weakest individual items, capped per factor.
+
+        The per-factor cap matters: without it a single very weak factor fills
+        the whole list with its own items and the profile reports the same
+        problem five times instead of showing the spread of gaps.
+        """
+        candidates = [
+            i
+            for f in factor_scores.values()
+            for i in f.item_scores
+            if i.score < self.cfg.ITEM_BARRIER_THRESHOLD
+        ]
+        candidates.sort(key=lambda i: i.score)
+
+        selected: List[ItemScore] = []
+        per_factor: Dict[str, int] = {}
+        for item in candidates:
+            if per_factor.get(item.factor_id, 0) >= self.cfg.MAX_ITEM_BARRIERS_PER_FACTOR:
+                continue
+            selected.append(item)
+            per_factor[item.factor_id] = per_factor.get(item.factor_id, 0) + 1
+            if len(selected) >= self.cfg.MAX_ITEM_BARRIERS:
+                break
+
+        return selected
