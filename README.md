@@ -1,15 +1,15 @@
 # AI Adoption Readiness Assessment Tool
 
-MSc Data Science dissertation project (CST4090), Middlesex University Dubai.
+MSc Data Science Thesis Project
 
-A tool that assesses a company's readiness for AI adoption across seven
+A tool that assesses a company's readiness for AI adoption across several
 readiness factors, assigns a readiness tier, identifies strengths and barriers,
 and generates prioritised recommendations for the weaker areas.
 
-This repository currently contains **steps 1–3** of the build: the scoring
-configuration and input schema, the scoring engine, and the recommendation
-engine. The synthetic data generation, export service and Streamlit dashboard
-are added in later steps.
+This repository currently contains **steps 1–5** of the build: the scoring
+configuration and input schema, the scoring engine, the recommendation engine,
+and rule-based synthetic data generation for testing. The export service and
+Streamlit dashboard are added in later steps.
 
 ---
 
@@ -22,7 +22,8 @@ are added in later steps.
 | `AssessmentResults` | `src/assessment_results.py` | Done |
 | `ScoringEngine` | `src/scoring_engine.py` | Done |
 | `RecommendationEngine` | `src/recommendation_engine.py` | Done |
-| Synthetic data (SDV) | — | Later |
+| Synthetic data (fake data) | `src/synthetic_data.py` | Done |
+| Survey, questionnare and datasets (SDV) | — | Needs real survey export |
 | `ExportService` (PDF/Excel) | — | Later |
 | `AssessmentDashboard` (Streamlit) | — | Later |
 
@@ -74,15 +75,19 @@ ai_readiness_tool/
 ├── .gitignore
 ├── conftest.py                    # lets pytest resolve the src package
 ├── run_example.py                 # worked example — run this first
+├── generate_synthetic_data.py     # synthetic dataset + engine report
+├── data/                          # generated + real data (never committed)
 ├── src/
 │   ├── __init__.py
 │   ├── score_configuration.py     # factors, items, weights, thresholds
 │   ├── company_profile.py         # input schema + validation
 │   ├── assessment_results.py      # output objects
 │   ├── scoring_engine.py          # weighted scoring
-│   └── recommendation_engine.py   # gap → action rules
+│   ├── recommendation_engine.py   # gap → action rules
+│   └── synthetic_data.py          # rule-based synthetic data generator 
 └── tests/
-    └── test_scoring.py            # 37 tests
+    ├── test_scoring.py            # 37 tests
+    └── test_synthetic_data.py     # 19 tests
 ```
 
 ---
@@ -120,7 +125,7 @@ Interpreter** → choose the one inside `.venv`.
 pip install -r requirements.txt
 ```
 
-Steps 1–3 use only the Python standard library, so this installs just `pytest`.
+Steps 1–5 use only the Python standard library, so this installs just `pytest`.
 
 ### 4. Run the worked example
 
@@ -138,8 +143,91 @@ You should see one Emerging (21.4), one Developing (57.1) and one Advanced
 pytest -v
 ```
 
-All 37 tests should pass. Run this after any change to the scoring logic or the
+All 56 tests should pass. Run this after any change to the scoring logic or the
 configuration — it is much cheaper than checking output by hand.
+
+### 6. Generate synthetic test data
+
+```bash
+python generate_synthetic_data.py
+```
+
+Writes three files — the coded CSV the tool reads, a readable copy with full
+question text for opening in Excel, and a data dictionary — then scores all 300
+companies and prints a report.
+
+---
+
+## Synthetic data
+
+`src/synthetic_data.py` is a fake dataset.
+
+**Rule-based (implemented)** invents companies from archetypes the researcher
+defines. It needs no real data and exists to exercise the scoring engine across
+many scenarios. It can show the tool *behaves* correctly. It cannot show the
+scoring reflects real companies, because every pattern in it was assumed rather
+than observed.
+
+
+Eight profiles are defined — struggling micro-business, funded but
+unprepared, tech-savvy small firm, traditional established firm, balanced
+developing, leadership-led but capability-lagging, governance-first, and
+advanced adopter — each with an intended readiness level per factor, plus
+per-company and per-item noise so no two generated firms are alike.
+
+Two properties are deliberate and worth knowing:
+
+**Reverse items are inverted in the output.** A generated company that is
+*strong* on data answers "poor data quality is our barrier" with a *low* value,
+exactly as a real respondent would. The CSV is therefore raw survey data and
+goes through the same reverse-coding path as genuine responses.
+
+**`current_ai_stage` is correlated with overall readiness.** This gives the
+dataset an ordinal outcome variable, so the empirical weight-derivation method
+can be exercised before real data arrives. On synthetic data this only
+reproduces the relationship the generator was told to create — it is a
+demonstration of method, never a finding.
+
+### Understanding the columns
+
+The dataset uses short codes (`BUD_1`, `WRK_3`, ...) because they are stable
+identifiers that the code, the tests and the write-up can all refer to
+unambiguously. They are not readable on their own, so two companion files are
+generated alongside:
+
+| File | Purpose |
+|---|---|
+| `data/synthetic_companies.csv` | What the tool reads. Coded columns, numeric answers. |
+| `data/synthetic_companies_readable.csv` | For opening in Excel. Full question text as headers, `4 - Agree` instead of `4`, reverse items marked, employee bands written as `10 to 49 employees`. |
+| `data/DATA_DICTIONARY.md` | Column reference: every code, its question, its factor, and whether it is reverse-worded. Worth putting in the appendix. |
+
+### Why the readable copy says "10 to 49 employees"
+
+Excel silently converts `1-9` to `01-Sep` and `10-49` to `Oct-49` when a CSV is
+opened by double-clicking, because it reads them as day-month and month-year.
+The file on disk is unaffected, but the spreadsheet is wrong on screen — and
+permanently wrong if saved from Excel. Since the readable copy exists
+specifically to be opened in Excel, its employee bands are written in a form
+Excel cannot misread. A test enforces this.
+
+The coded CSV keeps the survey's exact values (`10-49`), because that is what
+the tool validates against. Open that one via **Data → Get Data → From
+Text/CSV** if you need to inspect it in Excel, which lets you set the column
+type to Text and skips the conversion.
+
+### Testing against messy data
+
+The clean dataset alone gives false confidence — the tool looks robust only
+because nothing malformed was ever sent to it. `generate_invalid_rows()`
+produces the defects a real export actually contains (skipped questions, blank
+cells, out-of-range values, a 0–4 scale, un-recoded text answers, unrecognised
+categories) and the test suite asserts each is rejected with a message naming
+the offending field.
+
+The CSV is **not committed to the repository**. It is exactly reproducible from
+the seed, so the generator plus its seed is the artefact worth version
+controlling, and keeping `data/` excluded removes any risk of real survey
+responses being pushed by accident. Regenerate with the command above.
 
 ---
 
@@ -275,8 +363,15 @@ rather than in Git.
 ---
 
 ## Next steps
+5. `ExportService` for PDF and Excel download.
+6. `AssessmentDashboard` in Streamlit, and public deployment.
 
-4. Assemble the full profile output (mostly done — `AssessmentResults`).
-5. Synthetic data generation with SDV, once the schema above is settled.
-6. `ExportService` for PDF and Excel download.
-7. `AssessmentDashboard` in Streamlit, and public deployment.
+## Open findings from synthetic testing
+
+Running 300 generated companies surfaced one design issue worth a decision:
+**87% of companies hit the 8-recommendation cap**, averaging 7.4 each. For a
+mid-scoring firm that is a long list, and the prioritisation ordering is doing
+all the work of deciding what matters. Consider lowering
+`MAX_RECOMMENDATIONS`, or tightening `REFINE_BELOW`, so the output reads as a
+focused action list rather than an audit. Both are one-line changes in
+configuration.

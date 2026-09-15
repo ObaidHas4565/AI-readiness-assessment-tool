@@ -7,8 +7,6 @@ Three fictional companies are scored to show the engine behaving differently
 across scenarios: one weak almost everywhere, one with an uneven profile
 (well funded but with poor data and governance), and one broadly ready.
 
-Nothing here is real data. These profiles are hand-written test cases, which is
-deliberately all that is needed until SDV-generated data arrives.
 """
 
 from src import score_configuration as cfg
