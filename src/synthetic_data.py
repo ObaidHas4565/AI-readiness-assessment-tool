@@ -1,7 +1,8 @@
 """
 Synthetic data generation
 
-This file creates fake companies to test the assessment tool. Each company is built from one of the readiness
+This file makes up fake companies to test the assessment tool with, since real
+survey responses aren't in yet. Each company is built from one of the readiness
 profiles defined below (early stage, well funded, tech focused, and so on),
 each of which sets an intended readiness level per factor. Answers are then
 sampled around that level with some random variation and written out as raw
@@ -10,10 +11,11 @@ respondent's answer would be. That means the CSV this writes looks exactly like
 a real survey export and goes through the same validation and scoring path.
 
 Worth being clear about what this can and can't show: it's useful for checking
-the scoring and recommendation logic functions properly across a wide range of
+the scoring and recommendation logic behaves sensibly across a wide range of
 inputs, but it can't tell us whether the scoring reflects real companies,
 because the patterns in it are ones that were assumed rather than observed in
-real responses. Survey responses and datasets collected will be used to assess the tool to determine if it can work the same or better with real data. The synthetic data is  kept mainly for
+real responses. Only real survey data can answer that. Once responses are
+collected they should become the main test data, with this kept mainly for
 edge-case and validation testing.
 
 The categorical fields (industry, size, years in operation and so on) aren't
@@ -274,33 +276,47 @@ def write_csv(rows: Iterable[Dict[str, object]], path: str) -> int:
     return len(rows)
 
 
-def load_profiles_from_csv(path: str) -> List[Tuple[str, CompanyProfile]]:
+def load_profiles_from_lines(lines: Iterable[str]) -> List[Tuple[str, CompanyProfile]]:
     """
-    Load a CSV in the tool's schema into (identifier, CompanyProfile) pairs.
+    Parse CSV lines in the tool's schema into (identifier, CompanyProfile) pairs.
 
-    Works for this module's output and for any real survey export mapped to the
-    same column names. CSV values arrive as strings, so Likert columns are cast
-    to int here; anything non-numeric is left as-is so that CompanyProfile
-    validation reports it rather than this loader crashing.
+    Takes any iterable of lines rather than a path, so an uploaded file can be
+    read straight from memory without being written to disk first -- which is
+    what the dashboard needs, since nothing about a submission is meant to be
+    stored anywhere.
+
+    CSV values arrive as strings, so Likert columns are cast to int here.
+    Anything non-numeric is left alone on purpose, so CompanyProfile validation
+    reports it properly instead of this loader crashing on it.
     """
     profiles: List[Tuple[str, CompanyProfile]] = []
 
-    with open(path, newline="", encoding="utf-8") as handle:
-        for raw_row in csv.DictReader(handle):
-            row: Dict[str, object] = dict(raw_row)
-            for item in cfg.ALL_ITEMS:
-                value = row.get(item.id)
-                if value is None or value == "":
-                    row.pop(item.id, None)
-                    continue
-                try:
-                    row[item.id] = int(value)
-                except (TypeError, ValueError):
-                    pass  # left as-is; validation will report it
-            identifier = str(row.get("company_id") or f"row{len(profiles) + 1}")
-            profiles.append((identifier, CompanyProfile.from_dict(row)))
+    for raw_row in csv.DictReader(lines):
+        row: Dict[str, object] = dict(raw_row)
+        for item in cfg.ALL_ITEMS:
+            value = row.get(item.id)
+            if value is None or value == "":
+                row.pop(item.id, None)
+                continue
+            try:
+                row[item.id] = int(value)
+            except (TypeError, ValueError):
+                pass  # left as-is; validation will report it
+        identifier = str(row.get("company_id") or f"row{len(profiles) + 1}")
+        profiles.append((identifier, CompanyProfile.from_dict(row)))
 
     return profiles
+
+
+def load_profiles_from_csv(path: str) -> List[Tuple[str, CompanyProfile]]:
+    """
+    Load a CSV file in the tool's schema into (identifier, CompanyProfile) pairs.
+
+    Works for this module's output and for any real survey export mapped to the
+    same column names.
+    """
+    with open(path, newline="", encoding="utf-8") as handle:
+        return load_profiles_from_lines(handle)
 
 
 # ---------------------------------------------------------------------------

@@ -1,15 +1,22 @@
 # AI Adoption Readiness Assessment Tool
 
-MSc Data Science Thesis Project
+MSc Data Science dissertation project (CST4090), Middlesex University Dubai.
 
-A tool that assesses a company's readiness for AI adoption across several
+A tool that assesses a company's readiness for AI adoption across seven
 readiness factors, assigns a readiness tier, identifies strengths and barriers,
 and generates prioritised recommendations for the weaker areas.
 
-This repository currently contains **steps 1–5** of the build: the scoring
-configuration and input schema, the scoring engine, the recommendation engine,
-and rule-based synthetic data generation for testing. The export service and
-Streamlit dashboard are added in later steps.
+All seven build steps are in place: the scoring configuration and input
+schema, the scoring engine, the recommendation engine, synthetic data
+generation for testing, the PDF/Excel export service, and the Streamlit
+dashboard.
+
+To run the tool:
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
 
 ---
 
@@ -22,10 +29,9 @@ Streamlit dashboard are added in later steps.
 | `AssessmentResults` | `src/assessment_results.py` | Done |
 | `ScoringEngine` | `src/scoring_engine.py` | Done |
 | `RecommendationEngine` | `src/recommendation_engine.py` | Done |
-| Synthetic data (fake data) | `src/synthetic_data.py` | Done |
-| Survey, questionnare and datasets (SDV) | — | Needs real survey export |
-| `ExportService` (PDF/Excel) | — | Later |
-| `AssessmentDashboard` (Streamlit) | — | Later |
+| Synthetic data | `src/synthetic_data.py` | Done |
+| `ExportService` (PDF/Excel) | `src/export_service.py` | Done |
+| `AssessmentDashboard` (Streamlit) | `app.py` | Done |
 
 The module names map deliberately onto the classes in the Class Diagram in
 Chapter 4, so the code and the documented design can be read side by side.
@@ -84,10 +90,13 @@ ai_readiness_tool/
 │   ├── assessment_results.py      # output objects
 │   ├── scoring_engine.py          # weighted scoring
 │   ├── recommendation_engine.py   # gap → action rules
-│   └── synthetic_data.py          # rule-based synthetic data generator 
+│   ├── synthetic_data.py          # test data generator
+│   └── export_service.py          # PDF and Excel output
+├── app.py                         # Streamlit dashboard
 └── tests/
     ├── test_scoring.py            # 37 tests
-    └── test_synthetic_data.py     # 19 tests
+    ├── test_synthetic_data.py     # 19 tests
+    └── test_export_and_app.py     # 17 tests
 ```
 
 ---
@@ -125,7 +134,7 @@ Interpreter** → choose the one inside `.venv`.
 pip install -r requirements.txt
 ```
 
-Steps 1–5 use only the Python standard library, so this installs just `pytest`.
+The scoring logic itself needs nothing beyond the standard library. This installs what the exports and the dashboard need: `reportlab`, `openpyxl` and `streamlit`, plus `pytest` for the tests.
 
 ### 4. Run the worked example
 
@@ -143,8 +152,7 @@ You should see one Emerging (21.4), one Developing (57.1) and one Advanced
 pytest -v
 ```
 
-All 56 tests should pass. Run this after any change to the scoring logic or the
-configuration — it is much cheaper than checking output by hand.
+All 73 tests should pass. Run this after any change to the scoring logic or the configuration — it is much cheaper than checking output by hand.
 
 ### 6. Generate synthetic test data
 
@@ -156,24 +164,74 @@ Writes three files — the coded CSV the tool reads, a readable copy with full
 question text for opening in Excel, and a data dictionary — then scores all 300
 companies and prints a report.
 
+### 7. Run the dashboard
+
+```bash
+streamlit run app.py
+```
+
+It opens at `http://localhost:8501`. Two tabs:
+
+**Assessment** — the questionnaire as a company would fill it in. Answers go
+into the browser session only, nothing is written anywhere. When every question
+is answered, it scores, shows the profile, and offers the PDF and Excel
+downloads. Submitting an incomplete form lists which sections are still missing
+rather than scoring anyway.
+
+**Score a dataset** — upload a CSV in the tool's column format (a survey
+export, or the file from `generate_synthetic_data.py`) and every row is scored
+with the same engine. Shows the mean, tier split and factor averages, and lets
+you download the per-company results as a CSV. This tab is for the evaluation
+chapter, not for the SMEs using the tool.
+
+The barrier-worded questions are shown exactly as written, with nothing marking
+them out. Telling a respondent which questions are scored backwards would
+change how they answer.
+
 ---
 
-## Synthetic data
+## Exports
 
-`src/synthetic_data.py` is a fake dataset.
+`src/export_service.py` builds both downloads in memory and returns bytes —
+nothing is written to the server's disk, which is what keeps the
+nothing-is-stored design intact.
 
-**Rule-based (implemented)** invents companies from archetypes the researcher
-defines. It needs no real data and exists to exercise the scoring engine across
-many scenarios. It can show the tool *behaves* correctly. It cannot show the
+**PDF** — headline score and tier, factor bars, strengths, barriers, specific
+gaps, and the recommendations in priority order, plus a short note on how the
+score is calculated.
+
+**Excel** — four sheets: `Summary`, `Factor scores`, `Responses` (every
+question with both the raw answer and the re-coded one, so the effect of
+reverse coding is visible), and `Recommendations`.
+
+Neither file contains a company name or any identifying detail, because
+`CompanyProfile` never collects any.
+
+From code:
+
+```python
+from src.export_service import ExportService
+ExportService().write_pdf(results, "report.pdf")
+ExportService().write_excel(results, "report.xlsx")
+```
+
+---
+
+## Synthetic data — what it can and can't show
+
+`src/synthetic_data.py` makes up fake companies so the scoring engine can be
+tested across many scenarios before real survey responses exist. It can show
+the tool *behaves* correctly across a wide range of inputs. It cannot show the
 scoring reflects real companies, because every pattern in it was assumed rather
-than observed.
+than observed — only real responses can support that claim. Once those are
+collected they become the main test data, with this kept for edge cases and
+validation testing.
 
-
-Eight profiles are defined — struggling micro-business, funded but
-unprepared, tech-savvy small firm, traditional established firm, balanced
-developing, leadership-led but capability-lagging, governance-first, and
-advanced adopter — each with an intended readiness level per factor, plus
-per-company and per-item noise so no two generated firms are alike.
+Eight readiness profiles are defined — Early_Stage_Adopter, Well_Funded,
+Tech_Focused, Traditional_Company, Developing, Leadership_Driven,
+Governance_Focused and Advanced_Adopter — each with an intended readiness level
+per factor, plus per-company and per-item noise so no two generated firms are
+alike.
 
 Two properties are deliberate and worth knowing:
 
@@ -343,7 +401,7 @@ Write what changed and why, in the present tense:
 - `Add recommendation rules for governance factor`
 - `Fix reverse coding on WRK_3`
 - `Adjust readiness band boundaries after supervisor feedback`
-- `Add SDV synthetic data generation script`
+- `Add synthetic data generation script`
 
 Committing after each meaningful change gives you a history you can point at in
 Chapter 5, and a working state to fall back on if something breaks.
@@ -363,8 +421,17 @@ rather than in Git.
 ---
 
 ## Next steps
-5. `ExportService` for PDF and Excel download.
-6. `AssessmentDashboard` in Streamlit, and public deployment.
+
+The build itself is complete. What remains depends on real survey data:
+
+1. Collect the survey responses and run them through the **Score a dataset**
+   tab to check the tool behaves sensibly on real answers.
+2. Derive **empirical factor weights** from those responses, replacing the
+   equal weights currently used. `generate_synthetic_data.py` already prints
+   the correlation method that would do this.
+3. Resolve the two open decisions below.
+4. Deploy the dashboard publicly (Streamlit Community Cloud) if the evaluation
+   needs users to reach it.
 
 ## Open findings from synthetic testing
 
