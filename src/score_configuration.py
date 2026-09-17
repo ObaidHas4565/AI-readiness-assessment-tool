@@ -20,7 +20,7 @@ supplying constants to the ScoringEngine.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
 # 1. Likert scale
@@ -283,6 +283,147 @@ CATEGORICAL_FIELDS: Dict[str, Tuple[str, ...]] = {
     "region": REGIONS,
     "current_ai_stage": AI_ADOPTION_STAGES,
 }
+
+# Sector and country are open fields: the lists above are suggestions for the
+# dropdowns, not a closed set. A fixed list of five sectors and five countries
+# can't describe companies globally -- the first real survey run returned Real
+# Estate, Asset Management, Events, Transportation and Canada, none of which
+# were on the list. Anything non-empty is accepted for these two.
+#
+# The other three stay closed on purpose. They aren't descriptive labels, they
+# are ordered scales the tool reasons about: current_ai_stage is the outcome
+# variable that empirical weighting would be derived against, and size and age
+# are bands rather than free text. Variants of those get normalised by the
+# aliases below rather than accepted as-is.
+OPEN_FIELDS: frozenset = frozenset({"industry_sector", "region"})
+
+# A bare "Other" carries no information, so it is rejected and the respondent
+# is asked to say what the other is. Their answer becomes the stored value.
+NEEDS_SPECIFIC_VALUE: Tuple[str, ...] = ("other", "others", "n/a", "na", "none")
+
+# Common ways the closed fields get written in a real export, mapped back to
+# the canonical value. Matching is done on a lowercased, stripped copy.
+CATEGORY_ALIASES: Dict[str, Dict[str, str]] = {
+    "employee_band": {
+        "1-9": "1-9", "1 to 9": "1-9", "1-9 employees": "1-9",
+        "under 10": "1-9", "less than 10": "1-9", "micro": "1-9",
+        "10-49": "10-49", "10 to 49": "10-49", "10-49 employees": "10-49",
+        "small": "10-49",
+        "50-249": "50-249", "50 to 249": "50-249",
+        "50-249 employees": "50-249", "medium": "50-249",
+        "250+": "250+", "250 or more": "250+", "250+ employees": "250+",
+        "more than 250": "250+", "large": "250+",
+    },
+    "years_in_operation": {
+        "under 2 years": "Under 2 years", "under 2": "Under 2 years",
+        "less than 2 years": "Under 2 years", "<2 years": "Under 2 years",
+        "2-5 years": "2-5 years", "2 to 5 years": "2-5 years",
+        "6-10 years": "6-10 years", "6 to 10 years": "6-10 years",
+        "5-10 years": "6-10 years",
+        "10+ years": "10+ years", "over 10 years": "10+ years",
+        "more than 10 years": "10+ years", "10 or more years": "10+ years",
+    },
+    "current_ai_stage": {
+        "not considering": "Not considering", "none": "Not considering",
+        "no plans": "Not considering", "not started": "Not considering",
+        "exploring": "Exploring", "researching": "Exploring",
+        "considering": "Exploring", "planning": "Exploring",
+        "piloting": "Piloting", "pilot": "Piloting", "testing": "Piloting",
+        "trialling": "Piloting", "trialing": "Piloting",
+        "actively using": "Actively Using", "using": "Actively Using",
+        "in production": "Actively Using", "deployed": "Actively Using",
+        "fully integrated": "Fully Integrated", "integrated": "Fully Integrated",
+        "embedded": "Fully Integrated",
+    },
+}
+
+
+def normalise_category(field_name: str, value: object) -> Optional[str]:
+    """
+    Tidy a categorical value into the form the tool stores.
+
+    Open fields are returned trimmed, exactly as the respondent wrote them.
+    Closed fields are matched against their aliases so that "250+ employees"
+    or "Using" from someone else's export lands on the right band. A value
+    that matches nothing comes back unchanged, so validation can report it
+    rather than this function quietly inventing a category.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if field_name in OPEN_FIELDS:
+        # Open fields are tidied by the plausibility checks, which also settle
+        # casing and resolve "UAE"/"Dubai"/"United Arab Emirates" onto one
+        # country so the breakdowns don't split a single place into three.
+        from .open_value_checks import check_open_value
+
+        cleaned, _ = check_open_value(field_name, text)
+        return cleaned if cleaned is not None else text
+
+    allowed = CATEGORICAL_FIELDS.get(field_name, ())
+    for option in allowed:
+        if text.lower() == option.lower():
+            return option
+    return CATEGORY_ALIASES.get(field_name, {}).get(text.lower(), text)
+
+
+# Word answers, so an export that never converted the scale to numbers still
+# loads. The wording identifies the value on its own -- "Agree" is a 4 whether
+# or not a 4 was ever written next to it.
+LIKERT_FROM_TEXT: Dict[str, int] = {
+    "strongly disagree": 1, "strongly  disagree": 1, "str disagree": 1,
+    "strongly disagre": 1, "very dissatisfied": 1,
+    "disagree": 2, "somewhat disagree": 2, "slightly disagree": 2,
+    "neutral": 3, "neither": 3, "neither agree nor disagree": 3,
+    "no opinion": 3, "undecided": 3,
+    "agree": 4, "somewhat agree": 4, "slightly agree": 4,
+    "strongly agree": 5, "strongly  agree": 5, "str agree": 5,
+    "very satisfied": 5,
+}
+
+
+def parse_likert(value: object) -> Optional[int]:
+    """
+    Turn whatever is in a response cell into a 1-5 value, or None.
+
+    Handles the number itself, the number as text, and the wording on its own.
+    Returns None when the cell is blank or can't be read, so the caller decides
+    whether that's a skipped question or a broken file.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if LIKERT_MIN <= value <= LIKERT_MAX else None
+    if isinstance(value, float):
+        rounded = int(round(value))
+        return rounded if LIKERT_MIN <= rounded <= LIKERT_MAX else None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    # "4" or "4 - Agree" or "4 — Agree"
+    head = text.replace("—", "-").split("-")[0].strip()
+    if head.isdigit():
+        number = int(head)
+        if LIKERT_MIN <= number <= LIKERT_MAX:
+            return number
+
+    cleaned = " ".join(text.lower().replace("_", " ").split())
+    if cleaned in LIKERT_FROM_TEXT:
+        return LIKERT_FROM_TEXT[cleaned]
+
+    # Last resort: a cell like "Agree (4)" or "Response: strongly agree"
+    for phrase, number in sorted(
+        LIKERT_FROM_TEXT.items(), key=lambda kv: -len(kv[0])
+    ):
+        if phrase in cleaned:
+            return number
+    return None
 
 
 # ---------------------------------------------------------------------------

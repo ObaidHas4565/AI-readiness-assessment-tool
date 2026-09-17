@@ -129,6 +129,29 @@ def test_excel_lists_every_question(mixed_results):
     assert written == {item.id for item in cfg.ALL_ITEMS}
 
 
+def test_excel_actually_contains_charts(mixed_results):
+    """
+    A workbook of bare numbers was the complaint: the PDF drew bars and the
+    spreadsheet drew nothing, which is backwards for the file people are
+    meant to analyse in.
+    """
+    from openpyxl import load_workbook
+
+    workbook = load_workbook(io.BytesIO(to_excel_bytes(mixed_results)))
+    assert len(workbook["Factor scores"]._charts) >= 2, "factor charts missing"
+    assert len(workbook["Responses"]._charts) >= 1, "question chart missing"
+
+
+def test_excel_charts_survive_a_company_with_no_recommendations():
+    """The chart ranges are built from row counts, so the empty case matters."""
+    from openpyxl import load_workbook
+
+    perfect = results_for(lambda item: 1 if item.reverse else 5)
+    assert perfect.recommendations == []
+    workbook = load_workbook(io.BytesIO(to_excel_bytes(perfect)))
+    assert len(workbook["Factor scores"]._charts) >= 2
+
+
 def test_excel_never_writes_a_size_excel_would_read_as_a_date(mixed_results):
     """Same trap as the readable CSV -- "10-49" becomes Oct-49 in Excel."""
     import re
@@ -227,6 +250,54 @@ def test_results_view_offers_both_downloads():
     labels = [button.label for button in app.download_button]
     assert "Download PDF report" in labels
     assert "Download Excel workbook" in labels
+
+
+def test_answering_a_question_does_not_collapse_its_section():
+    """
+    Streamlit re-runs the whole script on every answer. When `expanded` came
+    from a fixed value, that rerun snapped the section shut mid-way through
+    filling it in, so people lost their place and couldn't tell what they had
+    already completed.
+    """
+    app = run_app()
+    before = [expander.proto.expanded for expander in app.expander]
+    assert all(before), "sections should start open"
+
+    # Answer one question in a later section, then re-run as Streamlit would.
+    app.session_state["item_CUL_1"] = 4
+    app = app.run()
+
+    assert not app.exception
+    after = [expander.proto.expanded for expander in app.expander]
+    assert all(after), "a section closed itself after an answer was given"
+    assert len(after) == len(cfg.FACTORS)
+
+
+def test_section_headers_show_how_much_is_left():
+    app = run_app()
+    app.session_state["item_BUD_1"] = 5
+    app = app.run()
+
+    budget = next(e for e in app.expander if "Budget" in e.label)
+    assert "1/4" in budget.label
+
+    for item in cfg.FACTORS_BY_ID["budget"].items:
+        app.session_state[f"item_{item.id}"] = 4
+    app = app.run()
+
+    budget = next(e for e in app.expander if "Budget" in e.label)
+    assert "✓" in budget.label
+
+
+def test_other_asks_for_a_specific_answer():
+    """Picking Other reveals a box, and Other alone doesn't count as answered."""
+    app = run_app()
+    app.session_state["ctx_industry_sector"] = "Other (please specify)"
+    app = app.run()
+
+    assert not app.exception
+    assert any("specify" in box.label.lower() or box.label == "Please specify"
+               for box in app.text_input), "no box appeared to type the sector in"
 
 
 def test_starting_over_clears_the_answers():

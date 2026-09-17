@@ -190,17 +190,32 @@ def _sample_stage(mean_readiness: float, rng: random.Random) -> str:
     return rng.choices(cfg.AI_ADOPTION_STAGES, weights=weights, k=1)[0]
 
 
+# Sector and country are open fields, so generated companies use real names
+# rather than the dropdown shortlist. "Other" is deliberately absent: it is not
+# a sector, and the tool now asks for a specific answer instead of accepting it.
+GENERATED_SECTORS: Tuple[str, ...] = (
+    "Retail", "Technology", "Manufacturing", "Marketing", "Healthcare",
+    "Construction", "Logistics", "Hospitality", "Financial Services",
+    "Real Estate", "Education", "Professional Services",
+)
+
+GENERATED_REGIONS: Tuple[str, ...] = (
+    "UAE", "UK", "India", "USA", "Saudi Arabia", "Canada",
+    "Singapore", "Germany", "Australia", "Nigeria",
+)
+
+
 def _sample_categoricals(
     read_profile: Readiness_Profile, mean_readiness: float, rng: random.Random
 ) -> Dict[str, str]:
-    sectors = read_profile.sector_bias or cfg.INDUSTRY_SECTORS
+    sectors = read_profile.sector_bias or GENERATED_SECTORS
     return {
         "industry_sector": rng.choice(tuple(sectors)),
         "employee_band": rng.choice(tuple(read_profile.size_bias)),
         "years_in_operation": rng.choice(tuple(read_profile.age_bias)),
-        # Region is not tied to readiness -- there is no evidence base for
+        # Country is not tied to readiness -- there is no evidence base for
         # assuming a country effect, so it is drawn independently.
-        "region": rng.choice(cfg.REGIONS),
+        "region": rng.choice(GENERATED_REGIONS),
         "current_ai_stage": _sample_stage(mean_readiness, rng),
     }
 
@@ -499,8 +514,12 @@ def generate_invalid_rows(seed: Optional[int] = 13) -> List[Tuple[str, Dict[str,
         ("empty string where a number is expected", blank_item),
         ("out-of-range answer (scale mis-mapped on import)", variant(**{cfg.ALL_ITEMS[5].id: 7})),
         ("zero-indexed scale (0-4 instead of 1-5)", variant(**{cfg.ALL_ITEMS[6].id: 0})),
-        ("text answer left un-recoded", variant(**{cfg.ALL_ITEMS[9].id: "Agree"})),
-        ("unrecognised sector value", variant(industry_sector="Logistics")),
+        # Note: an unfamiliar sector or country is NOT in this list any more.
+        # Those fields are open, so "Logistics" or "Canada" are ordinary
+        # answers rather than errors -- a fixed list can't describe companies
+        # globally, and rejecting them was the tool's mistake, not the data's.
+        ("sector left blank", variant(industry_sector="")),
+        ("bare 'Other' with nothing specified", variant(industry_sector="Other")),
         ("employee band outside the survey's options", variant(employee_band="500+")),
         ("missing required context field", variant(region=None)),
     ]

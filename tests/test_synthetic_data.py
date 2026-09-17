@@ -1,5 +1,5 @@
 """
-Tests for the rule-based synthetic data generator.
+Tests for the synthetic data generator.
 
 These guard the property that actually matters: generated rows must be
 indistinguishable in FORM from real survey responses, so that anything which
@@ -190,8 +190,11 @@ def test_invalid_row_errors_name_the_offending_field():
     out_of_range = CompanyProfile.from_dict(cases["out-of-range answer (scale mis-mapped on import)"])
     assert any("out of range" in e for e in out_of_range.validate())
 
-    bad_sector = CompanyProfile.from_dict(cases["unrecognised sector value"])
-    assert any("Industry Sector" in e for e in bad_sector.validate())
+    blank_sector = CompanyProfile.from_dict(cases["sector left blank"])
+    assert any("Industry Sector" in e for e in blank_sector.validate())
+
+    vague = CompanyProfile.from_dict(cases["bare 'Other' with nothing specified"])
+    assert any("specific answer" in e for e in vague.validate())
 
     missing_region = CompanyProfile.from_dict(cases["missing required context field"])
     assert any("Region" in e for e in missing_region.validate())

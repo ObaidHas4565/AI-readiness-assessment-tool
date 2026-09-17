@@ -7,7 +7,7 @@ Column reference for the AI Adoption Readiness assessment dataset.
 | Column | Meaning | Allowed values |
 |---|---|---|
 | `company_id` | Synthetic row identifier | SYN0001, SYN0002, ... |
-| `archetype` | Generator pattern used (synthetic data only; absent from real data) | `struggling_micro`, `funded_but_unprepared`, `tech_savvy_small`, `traditional_established`, `balanced_developing`, `leadership_led_capability_lagging`, `governance_first`, `advanced_adopter` |
+| `profile` | Readiness profile used (synthetic data only; absent from real data) | `Early_Stage_Adopter`, `Well_Funded`, `Tech_Focused`, `Traditional_Company`, `Developing`, `Leadership_Driven`, `Governance_Focused`, `Advanced_Adopter` |
 | `industry_sector` | Industry sector | `Retail`, `Technology`, `Manufacturing`, `Marketing`, `Healthcare`, `Other` |
 | `employee_band` | Number of employees | `1-9`, `10-49`, `50-249`, `250+` |
 | `years_in_operation` | Years in operation | `Under 2 years`, `2-5 years`, `6-10 years`, `10+ years` |

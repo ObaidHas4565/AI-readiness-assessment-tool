@@ -30,6 +30,8 @@ streamlit run app.py
 | `ScoringEngine` | `src/scoring_engine.py` | Done |
 | `RecommendationEngine` | `src/recommendation_engine.py` | Done |
 | Synthetic data | `src/synthetic_data.py` | Done |
+| Survey import (any export format) | `src/survey_import.py` | Done |
+| Open-value checks (country/sector) | `src/open_value_checks.py` | Done |
 | `ExportService` (PDF/Excel) | `src/export_service.py` | Done |
 | `AssessmentDashboard` (Streamlit) | `app.py` | Done |
 
@@ -91,12 +93,15 @@ ai_readiness_tool/
 │   ├── scoring_engine.py          # weighted scoring
 │   ├── recommendation_engine.py   # gap → action rules
 │   ├── synthetic_data.py          # test data generator
+│   ├── survey_import.py           # reads real survey exports, matches by meaning
+│   ├── open_value_checks.py       # is this a real country / industry?
 │   └── export_service.py          # PDF and Excel output
 ├── app.py                         # Streamlit dashboard
 └── tests/
     ├── test_scoring.py            # 37 tests
     ├── test_synthetic_data.py     # 19 tests
-    └── test_export_and_app.py     # 17 tests
+    ├── test_export_and_app.py     # 22 tests
+    └── test_survey_import.py      # 86 tests
 ```
 
 ---
@@ -152,7 +157,7 @@ You should see one Emerging (21.4), one Developing (57.1) and one Advanced
 pytest -v
 ```
 
-All 73 tests should pass. Run this after any change to the scoring logic or the configuration — it is much cheaper than checking output by hand.
+All 164 tests should pass. Run this after any change to the scoring logic or the configuration — it is much cheaper than checking output by hand.
 
 ### 6. Generate synthetic test data
 
@@ -178,11 +183,15 @@ is answered, it scores, shows the profile, and offers the PDF and Excel
 downloads. Submitting an incomplete form lists which sections are still missing
 rather than scoring anyway.
 
-**Score a dataset** — upload a CSV in the tool's column format (a survey
-export, or the file from `generate_synthetic_data.py`) and every row is scored
-with the same engine. Shows the mean, tier split and factor averages, and lets
-you download the per-company results as a CSV. This tab is for the evaluation
-chapter, not for the SMEs using the tool.
+**Score a dataset** — upload a survey export (CSV or Excel) and every response
+is scored with the same engine. The columns do not have to be named the tool's
+way: it works out which column is which from the question wording and reads
+word answers like "Agree" as readily as numbers, so a Google Forms export of
+this questionnaire works exactly as downloaded. It shows what matched, the
+score distribution, tier split, factor averages, a profile radar, and
+breakdowns by adoption stage, sector, country, size and age — but only the
+breakdowns the file can actually support. Open-ended answers are kept and shown
+rather than discarded. This tab is for the evaluation chapter, not for SMEs.
 
 The barrier-worded questions are shown exactly as written, with nothing marking
 them out. Telling a respondent which questions are scored backwards would
@@ -202,7 +211,10 @@ score is calculated.
 
 **Excel** — four sheets: `Summary`, `Factor scores`, `Responses` (every
 question with both the raw answer and the re-coded one, so the effect of
-reverse coding is visible), and `Recommendations`.
+reverse coding is visible), and `Recommendations`. `Factor scores` carries a
+bar chart and a radar of the profile; `Responses` carries a chart of all 32
+questions, which is where a factor with a decent average hiding one weak
+question shows up.
 
 Neither file contains a company name or any identifying detail, because
 `CompanyProfile` never collects any.
@@ -442,3 +454,88 @@ all the work of deciding what matters. Consider lowering
 `MAX_RECOMMENDATIONS`, or tightening `REFINE_BELOW`, so the output reads as a
 focused action list rather than an audit. Both are one-line changes in
 configuration.
+
+
+---
+
+## Reading real survey exports
+
+`src/survey_import.py` exists because the first live survey run failed
+completely: 17 responses, all rejected, purely over formatting. Google Forms
+writes `Industry Sector` where the tool wanted `industry_sector`, writes the
+full question text where the tool wanted `BUD_1`, and writes `Agree` where the
+tool wanted `4`. Nothing about the responses was wrong.
+
+What it does now:
+
+- Matches columns by question wording rather than exact names. The matching is
+  fuzzy on purpose — the live form has typos (`idenitfied`, `exisitng`) that
+  the configuration spells correctly, and an exact match threw those questions
+  away for no reason.
+- Reads word answers, numbers, or `4 - Agree`, all the same.
+- Accepts `.csv` and `.xlsx`.
+- Keeps the open-ended answers instead of dropping them.
+- Reports every column it couldn't place, so nothing disappears silently.
+
+**Sector and country have no permitted list at all.** The first live run
+returned Real Estate, Asset Management, Events, Transportation, Financial
+Services and Canada — none on the original list, all real answers. A list of
+five sectors and five countries cannot describe companies globally.
+
+Open does not mean anything goes, though. `src/open_value_checks.py` checks
+that an answer is a real one, because a nonsense value quietly ruins every
+breakdown that groups by it afterwards:
+
+- **Countries** are checked against the ~200 that exist, plus abbreviations,
+  short forms and major cities. That is not a restriction — countries are
+  genuinely enumerable. It also resolves "UAE", "Dubai" and "United Arab
+  Emirates" onto one name, so a single country stops appearing as three bars.
+- **Industries** are not enumerable, so they are checked against a vocabulary
+  of industry words instead. Any answer containing something recognisable as
+  an industry is accepted exactly as typed — "marine engineering consultancy"
+  and "halal food logistics" both pass without appearing on any list.
+- Anything with no country and no industry in it — `bahab`, `qwerty` — is sent
+  back asking for a real answer.
+
+Size, age and adoption stage stay closed, because they are ordered scales the
+tool reasons about rather than descriptive labels. Common variants
+(`250+ employees`, `over 10 years`, `Using`) are normalised onto the right band
+instead of being rejected.
+
+**A bare "Other" is not accepted.** It carries no information, so the form asks
+what the other is and stores that answer instead.
+
+### Matching by meaning
+
+Wording matching only works on this questionnaire retyped. It scores near zero
+on the same question asked in someone else's words, because it compares
+characters. So there is a second pass that compares meaning: stopwords removed,
+words reduced to stems, domain vocabulary folded into shared concepts
+(`broadband`, `servers` and `infrastructure` all become one concept), weighted
+by how rare each term is across the 32 questions, compared by cosine
+similarity.
+
+This is classical information retrieval rather than a pretrained language
+model, on purpose. A sentence-transformer would match slightly better at the
+cost of a large dependency, a download at startup, and results that can't be
+explained to an examiner or reproduced identically a year later. Everything
+here is deterministic and readable off the page.
+
+Measured against a genuinely different survey, meaning-matching picks the right
+**factor** 7 times out of 8, and the right individual **question** about 2
+times out of 6. That gap is why it is used the way it is.
+
+### What it will not do
+
+A file that doesn't contain this questionnaire's questions is **not scored**.
+The seven factors are defined by 32 specific statements; a number built from
+different questions would look like a readiness score without being one, and
+item-level matching is not accurate enough to pretend otherwise.
+
+What it does instead is compare the two instruments: which of the seven factors
+that survey covers, which it leaves untouched, and which of its questions
+correspond to nothing here. Run against a public-sector AI survey, it reports
+coverage of five factors, nothing at all on Data Readiness or Organizational
+Culture, and three questions that measure outcomes (whether AI has already
+improved services) rather than readiness. That comparison is useful for the
+evaluation chapter in a way that a fabricated score would not be.

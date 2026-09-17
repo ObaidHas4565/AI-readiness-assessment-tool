@@ -23,6 +23,8 @@ from typing import Dict, List, Optional, Tuple
 from xml.sax.saxutils import escape
 
 from openpyxl import Workbook
+from openpyxl.chart import BarChart, RadarChart, Reference
+from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from reportlab.lib import colors
@@ -488,6 +490,35 @@ def to_excel_bytes(results: AssessmentResults) -> bytes:
                  value=results.readiness_tier).font = Font(bold=True)
     factors.freeze_panes = "A2"
 
+    # A chart, because a workbook of bare numbers is worse than the PDF at the
+    # one thing a spreadsheet should be good at. Two views: the factor bars,
+    # and a radar that shows the shape of the profile at a glance.
+    last = len(results.factor_scores) + 1
+    labels = Reference(factors, min_col=1, min_row=2, max_row=last)
+    values = Reference(factors, min_col=2, min_row=1, max_row=last)
+
+    bars = BarChart()
+    bars.type = "bar"
+    bars.title = "Readiness by factor"
+    bars.y_axis.title = "Score /100"
+    bars.add_data(values, titles_from_data=True)
+    bars.set_categories(labels)
+    bars.dataLabels = DataLabelList()
+    bars.dataLabels.showVal = True
+    bars.height, bars.width = 9, 20
+    bars.legend = None
+    factors.add_chart(bars, f"A{last + 3}")
+
+    shape = RadarChart()
+    shape.type = "filled"
+    shape.title = "Profile shape"
+    shape.add_data(values, titles_from_data=True)
+    shape.set_categories(labels)
+    shape.height, shape.width = 11, 11
+    shape.y_axis.scaling.min = 0
+    shape.y_axis.scaling.max = 100
+    factors.add_chart(shape, f"H{last + 3}")
+
     # --- Responses --------------------------------------------------------
     # Both the raw answer and the re-coded one, because the difference between
     # them on reverse-worded questions is the thing people query most.
@@ -514,6 +545,24 @@ def to_excel_bytes(results: AssessmentResults) -> bytes:
                 responses.cell(row=row, column=column).border = _BORDER
             row += 1
     responses.freeze_panes = "A2"
+
+    # Every question on one chart. This is the view that shows a factor with a
+    # decent average hiding one weak question inside it, which the factor-level
+    # numbers alone can't show.
+    item_rows = row - 1
+    item_chart = BarChart()
+    item_chart.type = "bar"
+    item_chart.title = "Every question, scored 0-100"
+    item_chart.add_data(
+        Reference(responses, min_col=7, min_row=1, max_row=item_rows),
+        titles_from_data=True,
+    )
+    item_chart.set_categories(
+        Reference(responses, min_col=1, min_row=2, max_row=item_rows)
+    )
+    item_chart.height, item_chart.width = 20, 20
+    item_chart.legend = None
+    responses.add_chart(item_chart, f"I2")
 
     # --- Recommendations --------------------------------------------------
     recs = workbook.create_sheet("Recommendations")

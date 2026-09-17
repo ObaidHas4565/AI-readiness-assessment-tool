@@ -35,3 +35,6 @@ data/*.xlsx
 # Generated output
 outputs/
 *.pdf
+
+# keep the folder, never its contents
+!data/.gitkeep

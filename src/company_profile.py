@@ -26,6 +26,8 @@ from .score_configuration import (
     ITEMS_BY_ID,
     LIKERT_MAX,
     LIKERT_MIN,
+    NEEDS_SPECIFIC_VALUE,
+    OPEN_FIELDS,
 )
 
 
@@ -72,9 +74,9 @@ class CompanyProfile:
         Build a profile from a flat dictionary.
 
         Accepts either a nested {"responses": {...}} form or a flat form where
-        item ids sit alongside the categorical fields -- the flat form is what a
+        item ids sit alongside the categorical fields. The flat form is what a
         CSV row of survey data looks like, which keeps loading real and
-        SDV-generated data straightforward later.
+        synthetic data straightforward.
         """
         data = dict(data)
         responses: Dict[str, int] = dict(data.get("responses") or {})
@@ -111,9 +113,40 @@ class CompanyProfile:
         # --- categorical fields ---
         for field_name, allowed in CATEGORICAL_FIELDS.items():
             value = getattr(self, field_name)
-            if value is None or value == "":
-                errors.append(f"'{_label(field_name)}' is required.")
-            elif value not in allowed:
+
+            if value is None or str(value).strip() == "":
+                errors.append(
+                    f"'{_label(field_name)}' is required "
+                    f"(column '{field_name}')."
+                )
+                continue
+
+            text = str(value).strip()
+
+            # "Other" on its own says nothing about the company, so it is sent
+            # back for a specific answer rather than stored as a category.
+            if text.lower() in NEEDS_SPECIFIC_VALUE:
+                errors.append(
+                    f"'{_label(field_name)}' needs a specific answer — "
+                    f"{text!r} on its own doesn't say which."
+                )
+                continue
+
+            # Sector and country are open -- there is no permitted list, so a
+            # company anywhere in any industry can answer. What is checked is
+            # that the answer is a real one: a country that exists, or
+            # something that reads as an industry. Gibberish is sent back,
+            # because a nonsense value quietly ruins every breakdown that
+            # groups by it later.
+            if field_name in OPEN_FIELDS:
+                from .open_value_checks import check_open_value
+
+                _, problem = check_open_value(field_name, text)
+                if problem:
+                    errors.append(problem)
+                continue
+
+            if text not in allowed:
                 errors.append(
                     f"'{_label(field_name)}' must be one of {', '.join(allowed)} "
                     f"(got {value!r})."
