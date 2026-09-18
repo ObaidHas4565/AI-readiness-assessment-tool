@@ -311,3 +311,115 @@ def test_starting_over_clears_the_answers():
     assert "results" not in app.session_state
     # The form is showing again, so the radios exist but none is selected.
     assert all(radio.value is None for radio in app.radio)
+
+
+# ---------------------------------------------------------------------------
+# Written answers, and the dataset report
+# ---------------------------------------------------------------------------
+
+def test_written_answers_reach_the_results_and_the_pdf():
+    """They were collected and then dropped on the floor."""
+    profile = CompanyProfile.from_dict({
+        **CONTEXT,
+        "open_biggest_barrier": "Cost, and nobody in-house who understands it.",
+        "open_what_would_help": "Affordable training.",
+        **{item.id: 3 for item in cfg.ALL_ITEMS},
+    })
+    results = ScoringEngine().score(profile)
+    assert len(results.notes) == 2
+    assert "notes" in results.to_dict()
+    assert to_pdf_bytes(results).startswith(b"%PDF-")
+
+
+def test_pdf_carries_the_profile_shape_and_every_question(mixed_results):
+    """
+    The report was missing two things the screen showed: the profile shape and
+    the question-by-question detail. Size is a blunt proxy, but a report with
+    a radar and 32 rows in it cannot be as small as one without.
+    """
+    data = to_pdf_bytes(mixed_results)
+    assert data.startswith(b"%PDF-")
+    assert len(data) > 9000, "the detail sections look to be missing"
+
+
+def _small_cohort():
+    from src.recommendation_engine import RecommendationEngine
+
+    scored, profiles = [], {}
+    for index, (sector, country, answer) in enumerate((
+        ("Retail", "UAE", 2), ("Retail", "UAE", 4),
+        ("Logistics", "Kenya", 3), ("Logistics", "Kenya", 5),
+    )):
+        profile = CompanyProfile.from_dict({
+            **CONTEXT, "industry_sector": sector, "region": country,
+            **{item.id: answer for item in cfg.ALL_ITEMS},
+        })
+        result = ScoringEngine().score(profile)
+        RecommendationEngine().recommend(result)
+        identifier = f"R{index}"
+        scored.append((identifier, result))
+        profiles[identifier] = profile
+    return scored, profiles
+
+
+def test_dataset_summary_splits_profiles_by_country_and_sector():
+    """
+    One averaged shape across several countries describes a company that
+    exists nowhere in the file.
+    """
+    from src.export_service import summarise_dataset
+
+    scored, profiles = _small_cohort()
+    summary = summarise_dataset(scored, profiles)
+
+    assert summary.count == 4
+    assert summary.split_profiles
+    assert {g.label for g in summary.by_country} == {"United Arab Emirates", "Kenya"}
+    assert {g.label for g in summary.by_sector} == {"Retail", "Logistics"}
+
+
+def test_dataset_gets_recommendations_like_a_single_assessment():
+    from src.export_service import summarise_dataset
+
+    scored, profiles = _small_cohort()
+    summary = summarise_dataset(scored, profiles)
+    assert summary.recommendations, "a weak cohort produced no advice"
+    assert all(r.title for r in summary.recommendations)
+
+
+def test_dataset_downloads_are_real_files_with_charts():
+    from openpyxl import load_workbook
+    from src.export_service import (
+        dataset_excel_bytes, dataset_pdf_bytes, summarise_dataset,
+    )
+
+    scored, profiles = _small_cohort()
+    notes = [("R0", {"Biggest barrier": "Cost and a lack of trained staff."}),
+             ("R1", {"Biggest barrier": "Data quality and privacy rules."})]
+    summary = summarise_dataset(scored, profiles, notes, "test.csv")
+
+    pdf = dataset_pdf_bytes(summary)
+    assert pdf.startswith(b"%PDF-") and len(pdf) > 4000
+
+    workbook = load_workbook(io.BytesIO(dataset_excel_bytes(summary)))
+    assert "Factor averages" in workbook.sheetnames
+    assert len(workbook["Factor averages"]._charts) >= 2
+    assert sum(len(workbook[s]._charts) for s in workbook.sheetnames) >= 4
+
+
+def test_themes_group_the_written_answers_by_subject():
+    """
+    "cost", "budget" and "expensive" are one concern. Counting raw words
+    would report them as three small ones.
+    """
+    from src.export_service import extract_themes
+
+    notes = [
+        ("a", {"q": "Cost is the main problem for us."}),
+        ("b", {"q": "We cannot afford the investment."}),
+        ("c", {"q": "Budget is too tight."}),
+        ("d", {"q": "Staff need training before we can use it."}),
+    ]
+    themes = dict((name, count) for name, count, _ in extract_themes(notes))
+    assert themes.get("Cost and funding", 0) == 3
+    assert themes.get("Skills and training", 0) == 1

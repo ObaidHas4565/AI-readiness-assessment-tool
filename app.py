@@ -27,7 +27,15 @@ import streamlit as st
 
 from src import score_configuration as cfg
 from src.company_profile import CompanyProfile
-from src.export_service import BAND_COLOURS, SEVERITY_COLOURS, SEVERITY_LABELS, ExportService
+from src.export_service import (
+    BAND_COLOURS,
+    SEVERITY_COLOURS,
+    SEVERITY_LABELS,
+    ExportService,
+    dataset_excel_bytes,
+    dataset_pdf_bytes,
+    summarise_dataset,
+)
 from src.recommendation_engine import RecommendationEngine
 from src.scoring_engine import ScoringEngine
 from src.survey_import import import_survey, profiles_from_report
@@ -120,7 +128,9 @@ def radar(scores: Sequence[Tuple[str, float]], colour: str, size: int = 340) -> 
         return
 
     centre = size / 2
-    radius = size * 0.34
+    # Small charts sit in narrow columns, so the web needs to shrink to leave
+    # room for the labels around it -- otherwise "Governance" runs off the edge.
+    radius = size * (0.28 if size < 250 else 0.34)
     count = len(scores)
 
     def point(index: int, value: float) -> Tuple[float, float]:
@@ -196,7 +206,7 @@ def item_strip(results) -> None:
             f'vertical-align:middle">{esc(factor.name)}</span>{blocks}</div>',
             unsafe_allow_html=True,
         )
-    st.caption("One block per question. Green(Strong), Yellow (Neutral), Red(Weak). Hover to read it.")
+    st.caption("One block per question, darkest = weakest. Hover to read it.")
 
 
 def histogram(values: Sequence[float], bins: int = 10) -> None:
@@ -257,7 +267,8 @@ def answer_label(value: int) -> str:
 
 def reset_assessment() -> None:
     for key in list(st.session_state.keys()):
-        if key.startswith(("item_", "ctx_", "specify_")) or key == "results":
+        if (key.startswith(("item_", "ctx_", "specify_", "open_"))
+                or key == "results"):
             del st.session_state[key]
 
 
@@ -350,6 +361,27 @@ def render_form() -> None:
                 st.markdown("<div style='height:2px'></div>", unsafe_allow_html=True)
 
     st.divider()
+    st.subheader("Anything else")
+    st.caption(
+        "Optional, and never scored. The questions above cover seven areas in "
+        "a fixed way; this is where anything they miss can be said plainly. "
+        "It appears in your report, and across a dataset these answers are "
+        "grouped to show what people raise most."
+    )
+    st.text_area(
+        "What is the single biggest thing holding your company back from AI?",
+        key="open_biggest_barrier", height=80,
+    )
+    st.text_area(
+        "What would help your company move forward most?",
+        key="open_what_would_help", height=80,
+    )
+    st.text_area(
+        "Any other concerns or comments about AI adoption",
+        key="open_additional_comments", height=80,
+    )
+
+    st.divider()
 
     if st.button("See my results", type="primary", use_container_width=True):
         submit()
@@ -369,6 +401,10 @@ def submit() -> None:
         if value is not None:
             payload[item.id] = value
 
+    for written in ("open_biggest_barrier", "open_what_would_help",
+                    "open_additional_comments"):
+        payload[written] = st.session_state.get(written, "") or ""
+
     profile = CompanyProfile.from_dict(payload)
     errors = profile.validate()
 
@@ -382,12 +418,32 @@ def submit() -> None:
             if context_value(field) is None
         ]
 
-        st.error(
-            f"**Not quite finished** — {len(unanswered)} question"
-            f"{'s' if len(unanswered) != 1 else ''} and "
-            f"{len(missing_context)} company detail"
-            f"{'s' if len(missing_context) != 1 else ''} still to go."
-        )
+        # An answer can be present but not usable -- a sector that doesn't
+        # read as one, say. Counting blanks alone reported "0 questions and 0
+        # company details still to go" while refusing to continue, which told
+        # the person nothing about what was actually wrong. Anything that
+        # isn't a plain blank is shown in full, in its own words.
+        blanks = len(unanswered) + len(missing_context)
+        rejected = [
+            message for message in errors
+            if "is required" not in message and "not answered" not in message
+        ]
+
+        if rejected:
+            st.error("**Something needs changing before this can be scored.**")
+            for message in rejected:
+                st.write(f"• {message}")
+            if blanks:
+                st.write(f"There {'is' if blanks == 1 else 'are'} also "
+                         f"{blanks} unanswered item{'' if blanks == 1 else 's'}.")
+        else:
+            st.error(
+                f"**Not quite finished** — {len(unanswered)} question"
+                f"{'s' if len(unanswered) != 1 else ''} and "
+                f"{len(missing_context)} company detail"
+                f"{'s' if len(missing_context) != 1 else ''} still to go."
+            )
+
         if missing_context:
             st.write("**About your company** — " + "; ".join(missing_context))
 
@@ -658,166 +714,239 @@ def render_batch() -> None:
     if upload is None:
         st.caption(
             "CSV or Excel. A Google Forms export of this questionnaire works "
-            "as downloaded — no renaming or reformatting needed."
+            "as downloaded, and so does anything this tool wrote itself."
         )
         return
 
-    report = import_survey(upload.getvalue(), upload.name)
-    if report.error:
-        st.error(report.error)
+    first_pass = import_survey(upload.getvalue(), upload.name)
+    if first_pass.error:
+        st.error(first_pass.error)
         return
 
-    if report.looks_like_a_different_survey:
-        render_framework_comparison(report)
-        return
+    # A file that is a different instrument gets the comparison first, and
+    # then the option to score whatever factors it does cover. Leaving those
+    # factors unread wastes a real reading; applying them without asking would
+    # be deciding on the researcher's behalf that two questions measure the
+    # same thing.
+    if first_pass.looks_like_a_different_survey:
+        render_framework_comparison(first_pass)
 
-    render_import_report(report)
+        analysis = first_pass.compare_to_framework()
+        if not analysis["covered"]:
+            return
+
+        st.divider()
+        st.subheader("Score the factors it does cover")
+        covered = ", ".join(
+            cfg.FACTORS_BY_ID[f].name for f in analysis["covered"])
+        st.markdown(
+            f"This dataset has questions matching **{covered}**. Those can be "
+            f"scored on their own, with the overall figure re-weighted across "
+            f"only the factors present — a missing factor is left out rather "
+            f"than counted as zero."
+        )
+        st.caption(
+            "Treat what comes back as indicative. The questions were written "
+            "for a different survey and paired to this one by meaning, which "
+            "is reliable at factor level and much less so question by "
+            "question."
+        )
+        if not st.checkbox("Score the covered factors", key="score_partial"):
+            return
+
+        report = import_survey(upload.getvalue(), upload.name,
+                               use_meaning_matches=True)
+        partial_mode = True
+    else:
+        render_import_report(first_pass)
+        report = first_pass
+        partial_mode = bool(report.missing_items)
 
     pairs = profiles_from_report(report)
-    valid = [(identifier, profile) for identifier, profile in pairs if profile.is_valid()]
-    invalid = [(identifier, profile) for identifier, profile in pairs
-               if not profile.is_valid()]
-
-    st.write(f"**{len(pairs)} responses read** — {len(valid)} scored, "
-             f"{len(invalid)} rejected.")
-
-    if invalid:
-        with st.expander(f"{len(invalid)} responses couldn't be scored"):
-            for identifier, profile in invalid[:25]:
-                st.write(f"`{identifier}` — {profile.validate()[0]}")
-            if len(invalid) > 25:
-                st.caption(f"…and {len(invalid) - 25} more.")
-
-    if not valid:
-        return
-
-    scored = []
-    for identifier, profile in valid:
-        result = SCORING.score(profile)
+    scored, rejected = [], []
+    for identifier, profile in pairs:
+        try:
+            result = SCORING.score(profile, allow_partial=partial_mode)
+        except Exception:  # noqa: BLE001 - reported to the user below
+            rejected.append((identifier, profile))
+            continue
+        if not partial_mode and not profile.is_valid():
+            rejected.append((identifier, profile))
+            continue
         ADVICE.recommend(result)
         scored.append((identifier, result))
 
-    render_batch_analytics(report, scored, dict(pairs))
+    st.write(f"**{len(pairs)} responses read** — {len(scored)} scored, "
+             f"{len(rejected)} rejected.")
+
+    if rejected:
+        with st.expander(f"{len(rejected)} responses couldn't be scored"):
+            for identifier, profile in rejected[:25]:
+                problems = profile.validate()
+                st.write(f"`{identifier}` — "
+                         f"{problems[0] if problems else 'no usable answers'}")
+            if len(rejected) > 25:
+                st.caption(f"…and {len(rejected) - 25} more.")
+
+    if not scored:
+        return
+
+    notes = [(row.get("company_id"), row["free_text"])
+             for row in report.rows if row.get("free_text")]
+    summary = summarise_dataset(scored, dict(pairs), notes, upload.name)
+    render_dataset(summary)
 
 
-def render_batch_analytics(report, scored, profiles_by_id) -> None:
-    """
-    The charts worth drawing for this particular file.
-
-    Which ones appear depends on what the data contains: a single-country
-    file gets no country chart, and a file with no open-ended questions gets
-    no comments section. Drawing a comparison with one bar in it is worse
-    than leaving it out.
-    """
-    results = [result for _, result in scored]
-    overall = [result.overall_score for result in results]
-    mean = sum(overall) / len(overall)
+def render_dataset(summary) -> None:
+    """The dataset analysis: the same numbers the downloads are built from."""
+    if summary.partial:
+        absent = [cfg.FACTORS_BY_ID[f].name for f in summary.factors_absent]
+        st.warning(
+            "**Partial coverage.** Scores below are built only from the "
+            "questions this dataset contains, re-weighted across the factors "
+            "present."
+            + (f" No reading was possible for: {', '.join(absent)}."
+               if absent else "")
+        )
 
     top, middle, bottom = st.columns(3)
-    top.metric("Mean readiness", f"{mean:.1f}")
-    middle.metric("Lowest", f"{min(overall):.1f}")
-    bottom.metric("Highest", f"{max(overall):.1f}")
+    top.metric("Mean readiness", f"{summary.mean:.1f}")
+    middle.metric("Lowest", f"{summary.lowest:.1f}")
+    bottom.metric("Highest", f"{summary.highest:.1f}")
 
     st.subheader("How the scores are spread")
-    histogram(overall)
+    histogram(summary.scores)
 
     st.subheader("Tier split")
     for band in cfg.READINESS_BANDS:
-        count = sum(1 for r in results if r.readiness_tier == band.label)
-        score_bar(
-            band.label, count / len(results) * 100, band.label,
-            caption=f"% &middot; {count} of {len(results)}",
-        )
+        count = summary.tier_counts.get(band.label, 0)
+        score_bar(band.label, count / max(1, summary.count) * 100, band.label,
+                  caption=f"% &middot; {count} of {summary.count}")
 
     st.subheader("Average by factor")
-    factor_means = []
-    for factor in cfg.FACTORS:
-        scores = [r.factor(factor.id).score for r in results]
-        factor_means.append((factor.name, sum(scores) / len(scores)))
-    for name, value in sorted(factor_means, key=lambda kv: -kv[1]):
-        score_bar(name, value, cfg.band_for_score(value).label)
+    for factor_id, mean in summary.factor_means:
+        score_bar(cfg.FACTORS_BY_ID[factor_id].name, mean,
+                  cfg.band_for_score(mean).label)
 
-    st.subheader("Average profile shape")
-    radar(
-        [(SHORT_FACTOR_NAMES[f.id],
-          sum(r.factor(f.id).score for r in results) / len(results))
-         for f in cfg.FACTORS],
-        band_colour(cfg.band_for_score(mean).label),
-    )
+    # --- profile shapes ---------------------------------------------------
+    # Split by country and sector when the data holds more than one of either.
+    # A single averaged shape over several countries describes a company that
+    # does not exist anywhere in the file.
+    if summary.split_profiles:
+        if len(summary.by_country) > 1:
+            st.subheader("Profile shape by country")
+            _radar_grid(summary.by_country)
+        if len(summary.by_sector) > 1:
+            st.subheader("Profile shape by sector")
+            _radar_grid(summary.by_sector)
+    else:
+        st.subheader("Average profile shape")
+        radar([(SHORT_FACTOR_NAMES[fid], value)
+               for fid, value in summary.factor_means],
+              band_colour(cfg.band_for_score(summary.mean).label))
 
-    # --- comparisons that only make sense if the data supports them --------
-    drawn = []
-    st.subheader("Breakdowns")
-
-    for field, title in (
-        ("current_ai_stage", "Readiness by current AI adoption stage"),
-        ("industry_sector", "Readiness by sector"),
-        ("region", "Readiness by country"),
-        ("employee_band", "Readiness by company size"),
-        ("years_in_operation", "Readiness by company age"),
-    ):
-        groups: Dict[str, List[float]] = defaultdict(list)
-        for identifier, result in scored:
-            value = getattr(profiles_by_id[identifier], field, None)
-            if value:
-                groups[str(value)].append(result.overall_score)
-        if grouped_bars(title, groups):
-            drawn.append(title)
-            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
-    if not drawn:
+    # --- recommendations --------------------------------------------------
+    st.subheader("Recommended actions for this group")
+    if not summary.recommendations:
+        st.success("No actions flagged — every factor averages at or above "
+                   "the Advanced threshold.")
+    else:
         st.caption(
-            "Every response in this file shares the same sector, size, country "
-            "and adoption stage, so there's nothing to compare across."
+            "Built from the average profile across the dataset, using the "
+            "same rules a single assessment uses."
         )
-    elif "Readiness by current AI adoption stage" in drawn:
-        st.caption(
-            "The adoption-stage breakdown is the one that matters for the "
-            "research question: it is the outcome variable that empirical "
-            "factor weights would be derived against."
-        )
+        for index, rec in enumerate(summary.recommendations, start=1):
+            colour = "#" + SEVERITY_COLOURS.get(rec.severity, "555555")
+            label = SEVERITY_LABELS.get(rec.severity, rec.severity.title())
+            st.markdown(
+                f"""
+                <div style="border-left:3px solid {colour};background:#FAFAFA;
+                            padding:10px 14px;margin-bottom:9px;border-radius:3px">
+                  <span style="color:{colour};font-weight:700;font-size:.85rem">
+                    {index}. {esc(label)}</span>
+                  <span style="opacity:.55;font-size:.78rem">
+                    &nbsp;{esc(rec.factor_name)}</span>
+                  <div style="font-weight:600;margin-top:3px">{esc(rec.title)}</div>
+                  <div style="font-size:.88rem;margin-top:3px">{esc(rec.action)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-    # --- what people actually wrote ---------------------------------------
-    notes = [(row.get("company_id"), row["free_text"])
-             for row in report.rows if row.get("free_text")]
-    if notes:
-        st.subheader("In their own words")
+    if summary.recommendation_counts:
+        with st.expander("Most common recommendations across individual companies"):
+            for title, count in summary.recommendation_counts:
+                st.write(f"**{count}×** {title}")
+
+    # --- what people wrote ------------------------------------------------
+    if summary.themes:
+        st.subheader("What respondents raised themselves")
         st.caption(
-            f"{len(notes)} of {len(report.rows)} responses included written "
-            f"answers. These are never scored, but they are where the numbers "
-            f"get explained."
+            f"Grouped from the written answers in {len(summary.notes)} "
+            f"responses. Never scored — and regularly the part that explains "
+            f"why a score is what it is."
         )
-        for identifier, answers in notes[:40]:
-            with st.expander(f"{identifier}"):
+        for name, count, examples in summary.themes:
+            share = count / max(1, len(summary.notes)) * 100
+            score_bar(name, share, cfg.band_for_score(100 - share).label,
+                      caption=f"% &middot; raised by {count}")
+            for example in examples[:1]:
+                st.markdown(
+                    f"<div style='font-size:.8rem;color:#777;margin:-4px 0 10px 2px'>"
+                    f"“{esc(example)}”</div>", unsafe_allow_html=True)
+
+    if summary.notes:
+        with st.expander(f"All {len(summary.notes)} written responses"):
+            for identifier, answers in summary.notes[:60]:
+                st.markdown(f"**{esc(identifier)}**")
                 for question, answer in answers.items():
-                    st.markdown(f"**{question}**")
-                    st.write(answer)
+                    st.markdown(f"*{esc(question)}* — {esc(answer)}")
+                st.markdown("---")
 
-    # --- download ---------------------------------------------------------
-    header = ["company_id", "overall_score", "readiness_tier"]
-    header += [f.id for f in cfg.FACTORS]
-    header += ["industry_sector", "region", "employee_band",
-               "years_in_operation", "current_ai_stage", "recommendation_count"]
+    # --- downloads --------------------------------------------------------
+    st.divider()
+    st.subheader("Take it with you")
+    pdf_column, excel_column = st.columns(2)
+    with pdf_column:
+        st.download_button(
+            "Download PDF analysis",
+            data=dataset_pdf_bytes(summary),
+            file_name="ai-readiness-dataset-analysis.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+    with excel_column:
+        st.download_button(
+            "Download Excel analysis",
+            data=dataset_excel_bytes(summary),
+            file_name="ai-readiness-dataset-analysis.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+    st.caption("Both carry the same charts and figures shown here.")
 
-    lines = [",".join(header)]
-    for identifier, result in scored:
-        profile = profiles_by_id[identifier]
-        row = [identifier, f"{result.overall_score:.2f}", result.readiness_tier]
-        row += [f"{result.factor(f.id).score:.2f}" for f in cfg.FACTORS]
-        row += [
-            f'"{getattr(profile, name, "") or ""}"'
-            for name in ("industry_sector", "region", "employee_band",
-                         "years_in_operation", "current_ai_stage")
-        ]
-        row.append(str(len(result.recommendations)))
-        lines.append(",".join(row))
 
-    st.download_button(
-        "Download scored results (CSV)",
-        data="\n".join(lines).encode("utf-8"),
-        file_name="scored_results.csv",
-        mime="text/csv",
-    )
+def _radar_grid(groups) -> None:
+    """Small multiples: one profile shape per country or sector."""
+    for start in range(0, min(len(groups), 6), 3):
+        columns = st.columns(3)
+        for column, group in zip(columns, groups[start:start + 3]):
+            with column:
+                radar(
+                    [(SHORT_FACTOR_NAMES[fid], value)
+                     for fid, value in group.factor_means],
+                    band_colour(cfg.band_for_score(group.overall).label),
+                    size=210,
+                )
+                st.markdown(
+                    f"<div style='text-align:center;font-size:.84rem;"
+                    f"margin-top:-6px'><b>{esc(group.label)}</b><br/>"
+                    f"<span style='color:#888'>{group.overall:.1f}/100 · "
+                    f"n={group.count}</span></div>",
+                    unsafe_allow_html=True,
+                )
+    if len(groups) > 6:
+        st.caption(f"Showing the six largest of {len(groups)} groups.")
 
 
 # ---------------------------------------------------------------------------
@@ -851,7 +980,7 @@ with st.sidebar:
         "are gone when you close the tab. Downloaded files are the only copy."
     )
 
-assessment_tab, batch_tab = st.tabs(["Assessment", "Dataset"])
+assessment_tab, batch_tab = st.tabs(["Assessment", "Score a dataset"])
 
 with assessment_tab:
     results = st.session_state.get("results")

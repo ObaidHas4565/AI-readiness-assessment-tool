@@ -309,15 +309,41 @@ def meaning_similarity(left: str, right: str) -> float:
     return _cosine(_vector(left), _vector(right))
 
 
+def find_item_code(header: str) -> Optional[str]:
+    """
+    Look for one of the tool's own item codes anywhere in a header.
+
+    The readable CSV this tool writes puts the code in the middle of the
+    header, between the factor name and the question. Spotting it is both
+    faster and safer than matching the wording around it -- and the tool not
+    being able to read a file it produced itself is a poor look.
+    """
+    for token in re.split(r"[^A-Za-z0-9_]+", str(header).upper()):
+        if token in cfg.ITEMS_BY_ID:
+            return token
+    return None
+
+
 def _question_text(header: str) -> str:
     """
     Pull the question out of a column header.
 
-    Google Forms writes "Section name [the actual question]". Other exports
-    use "Section name - question" or just the question. All three end up as
-    the question alone.
+    Google Forms writes "Section name [the actual question]". The readable CSV
+    writes "Factor | CODE | question  [REVERSE-WORDED]". Other exports use
+    "Section name - question", or just the question. All of them end up as the
+    question alone.
     """
     header = str(header).strip()
+
+    # Annotations in shouting capitals are labels about the question, not part
+    # of it. Stripped before anything else so they can't drag a match down.
+    header = re.sub(r"\[\s*[A-Z][A-Z\s_\-]{3,}\s*\]", " ", header).strip()
+
+    # Pipe-separated headers: the question is the last and longest part.
+    if "|" in header:
+        parts = [part.strip() for part in header.split("|") if part.strip()]
+        if parts:
+            return max(parts, key=len)
 
     bracketed = re.search(r"\[(.+)\]", header, flags=re.DOTALL)
     if bracketed:
@@ -558,9 +584,9 @@ def match_columns(headers: Sequence[str]) -> Tuple[List[ColumnMatch], List[str],
 
         considered.add(header)
 
-        # 1. The column is already an item code.
-        code = str(header).strip().upper()
-        if code in cfg.ITEMS_BY_ID:
+        # 1. The column is, or contains, one of the tool's item codes.
+        code = find_item_code(header)
+        if code:
             proposals.append((header, code, "item", 1.0, "item code"))
             continue
 
@@ -661,7 +687,8 @@ def _best_context(flat_header: str) -> Tuple[str, float]:
 # Putting it together
 # ---------------------------------------------------------------------------
 
-def import_survey(data: bytes, filename: str = "") -> ImportReport:
+def import_survey(data: bytes, filename: str = "",
+                  use_meaning_matches: bool = False) -> ImportReport:
     """
     Read a survey export and map it onto the tool's schema.
 
@@ -690,7 +717,8 @@ def import_survey(data: bytes, filename: str = "") -> ImportReport:
     foreign = len(direct) / len(cfg.ALL_ITEMS) < 0.25
     usable = [
         m for m in matches
-        if not (foreign and m.kind == "item" and m.how == "meaning")
+        if not (foreign and m.kind == "item" and m.how == "meaning"
+                and not use_meaning_matches)
     ]
 
     rows: List[Dict[str, object]] = []

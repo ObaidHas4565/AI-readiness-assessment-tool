@@ -305,12 +305,16 @@ NEEDS_SPECIFIC_VALUE: Tuple[str, ...] = ("other", "others", "n/a", "na", "none")
 # the canonical value. Matching is done on a lowercased, stripped copy.
 CATEGORY_ALIASES: Dict[str, Dict[str, str]] = {
     "employee_band": {
+        # The spelled-out forms are what the readable CSV writes, to stop
+        # Excel turning "10-49" into a date. They have to read back in.
         "1-9": "1-9", "1 to 9": "1-9", "1-9 employees": "1-9",
-        "under 10": "1-9", "less than 10": "1-9", "micro": "1-9",
+        "1 to 9 employees": "1-9", "under 10": "1-9",
+        "less than 10": "1-9", "micro": "1-9",
         "10-49": "10-49", "10 to 49": "10-49", "10-49 employees": "10-49",
-        "small": "10-49",
+        "10 to 49 employees": "10-49", "small": "10-49",
         "50-249": "50-249", "50 to 249": "50-249",
-        "50-249 employees": "50-249", "medium": "50-249",
+        "50-249 employees": "50-249", "50 to 249 employees": "50-249",
+        "medium": "50-249",
         "250+": "250+", "250 or more": "250+", "250+ employees": "250+",
         "more than 250": "250+", "large": "250+",
     },

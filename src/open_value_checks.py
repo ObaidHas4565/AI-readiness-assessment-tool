@@ -114,7 +114,8 @@ COUNTRY_ALIASES: Dict[str, str] = {
 # on one entry.
 
 INDUSTRY_TERMS: Tuple[str, ...] = (
-    "account", "advertis", "aerospace", "agri", "agricultur", "airline",
+    "account", "advertis", "aerospace", "agency", "agri", "agricultur",
+    "airline", "bakery", "business",
     "apparel", "architect", "art", "asset", "audit", "automot", "automobile",
     "aviation", "bank", "beauty", "beverage", "biotech", "broadcast",
     "brokerage", "build", "casino", "catering", "chemical", "childcare",
@@ -144,16 +145,19 @@ INDUSTRY_TERMS: Tuple[str, ...] = (
     "sustainab", "tax", "teach", "tech", "telecom", "textile", "theatre",
     "tourism", "trade", "trading", "train", "transport", "travel", "truck",
     "utilit", "vehicle", "veterinar", "warehous", "waste", "water",
-    "wellness", "wholesale", "wood",
+    "wellness", "wholesale", "wood", "shop", "store", "studio", "salon",
+    "cafe", "catering", "factory", "workshop", "commerce", "operation",
+    "outsourcing", "freelance", "startup", "charity", "council", "ministry",
+    "municipal", "cooperative", "franchise",
 )
 
 # Words that carry no industry meaning on their own, so an answer made only of
 # these is not specific enough to keep.
 FILLER_WORDS: frozenset = frozenset({
     "and", "or", "the", "a", "an", "of", "in", "for", "to", "with", "on",
-    "company", "business", "sector", "industry", "firm", "organisation",
+    "company", "sector", "industry", "firm", "organisation",
     "organization", "group", "ltd", "llc", "inc", "plc", "limited", "co",
-    "corp", "corporation", "enterprise", "enterprises", "solutions", "our",
+    "corp", "corporation", "our",
     "we", "my", "other", "others", "general", "various", "misc",
     "miscellaneous", "etc", "na", "n", "none", "nil", "no", "yes", "test",
 })

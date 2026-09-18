@@ -50,6 +50,17 @@ class FactorScore:
     weighted_contribution: float  # score * weight, contribution to the overall
     item_scores: List[ItemScore] = field(default_factory=list)
 
+    # How many of this factor's questions were actually answered. Equal to the
+    # full count for a completed assessment; lower when a dataset from another
+    # source only covers part of the factor, which is worth carrying so a
+    # thinly-evidenced score is never mistaken for a solid one.
+    answered: int = 0
+    expected: int = 0
+
+    @property
+    def is_partial(self) -> bool:
+        return self.expected > 0 and self.answered < self.expected
+
     @property
     def gap(self) -> float:
         """Distance from a perfect score -- the headroom available."""
@@ -111,6 +122,14 @@ class AssessmentResults:
 
     context: Dict[str, Optional[str]] = field(default_factory=dict)
 
+    # True when the score was built from an incomplete set of answers, so
+    # every display of it can say so rather than presenting it as a full read.
+    partial: bool = False
+
+    # What the respondent wrote in their own words. Never scored, but shown
+    # alongside the scores because it usually explains them.
+    notes: Dict[str, str] = field(default_factory=dict)
+
     # ------------------------------------------------------------------
     # Convenience accessors used by the dashboard and export service
     # ------------------------------------------------------------------
@@ -131,8 +150,10 @@ class AssessmentResults:
         return {
             "overall_score": round(self.overall_score, 2),
             "readiness_tier": self.readiness_tier,
+            "partial": self.partial,
             "tier_description": self.tier_description,
             "context": dict(self.context),
+            "notes": dict(self.notes),
             "factors": [
                 {
                     "factor_id": f.factor_id,
@@ -141,6 +162,8 @@ class AssessmentResults:
                     "mean_likert": round(f.mean_likert, 3),
                     "score": round(f.score, 2),
                     "band": f.band_label,
+                    "answered": f.answered,
+                    "expected": f.expected,
                     "weighted_contribution": round(f.weighted_contribution, 3),
                 }
                 for f in self.ordered_factors()

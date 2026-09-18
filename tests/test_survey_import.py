@@ -499,3 +499,120 @@ def test_meaning_matches_never_silently_fill_a_foreign_file():
     assert report.looks_like_a_different_survey
     answered = [key for key in report.rows[0] if key in cfg.ITEMS_BY_ID]
     assert answered == [], f"values were imported from guesses: {answered}"
+
+
+# ---------------------------------------------------------------------------
+# Reading the tool's own output back in
+# ---------------------------------------------------------------------------
+
+def test_the_readable_csv_this_tool_writes_can_be_read_back():
+    """
+    The readable export failed to import: its headers carry the factor name,
+    the item code and a [REVERSE-WORDED] tag, and the six barrier questions
+    were dropped over that tag alone. A tool that can't read its own output
+    is not much of a tool.
+    """
+    import tempfile, os
+    from src.synthetic_data import generate_dataset, write_readable_csv
+
+    rows = generate_dataset(n=12, seed=3)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "readable.csv")
+        write_readable_csv(rows, path)
+        data = open(path, "rb").read()
+
+    report = import_survey(data, "readable.csv")
+    assert len(set(report.matched_items)) == len(cfg.ALL_ITEMS), (
+        f"dropped {report.missing_items}"
+    )
+    pairs = profiles_from_report(report)
+    for identifier, profile in pairs:
+        assert profile.validate() == [], f"{identifier}: {profile.validate()}"
+
+
+def test_spelled_out_employee_bands_read_back():
+    """The readable CSV writes "10 to 49 employees" to dodge Excel's date guess."""
+    for written, expected in (
+        ("1 to 9 employees", "1-9"), ("10 to 49 employees", "10-49"),
+        ("50 to 249 employees", "50-249"), ("250+ employees", "250+"),
+    ):
+        assert cfg.normalise_category("employee_band", written) == expected
+
+
+def test_an_item_code_anywhere_in_the_header_is_found():
+    from src.survey_import import find_item_code
+
+    assert find_item_code("Budget & Financial Readiness | BUD_1 | We have…") == "BUD_1"
+    assert find_item_code("GOV_5") == "GOV_5"
+    assert find_item_code("Number of Employees") is None
+
+
+# ---------------------------------------------------------------------------
+# Partial coverage
+# ---------------------------------------------------------------------------
+
+def test_a_dataset_covering_some_factors_is_scored_on_those():
+    """
+    Refusing a dataset outright because it misses two factors throws away a
+    real reading on the five it covers.
+    """
+    from src.scoring_engine import ScoringEngine
+
+    answers = {}
+    for factor_id in ("budget", "technology", "leadership"):
+        for item in cfg.FACTORS_BY_ID[factor_id].items:
+            answers[item.id] = 4
+
+    profile = CompanyProfile.from_dict({
+        "industry_sector": "Retail", "employee_band": "10-49",
+        "years_in_operation": "2-5 years", "region": "UAE",
+        "current_ai_stage": "Exploring", **answers,
+    })
+    results = ScoringEngine().score(profile, allow_partial=True)
+
+    assert results.partial
+    assert set(results.factor_scores) == {"budget", "technology", "leadership"}
+    assert "data" not in results.factor_scores, "absent factor scored as zero"
+
+
+def test_absent_factors_do_not_drag_the_overall_score_down():
+    """
+    The trap this avoids: treating "not asked" as "answered badly". The
+    overall is re-weighted across the factors present, so a partial read of
+    three strong factors reports strong, not weak.
+    """
+    from src.scoring_engine import ScoringEngine
+
+    engine = ScoringEngine()
+    base = {"industry_sector": "Retail", "employee_band": "10-49",
+            "years_in_operation": "2-5 years", "region": "UAE",
+            "current_ai_stage": "Exploring"}
+
+    full = engine.score(CompanyProfile.from_dict(
+        {**base, **{i.id: 4 for i in cfg.ALL_ITEMS}}))
+
+    subset = ("budget", "technology", "leadership")
+    partial_answers = {}
+    for factor_id in subset:
+        for item in cfg.FACTORS_BY_ID[factor_id].items:
+            partial_answers[item.id] = 4
+    partial = engine.score(
+        CompanyProfile.from_dict({**base, **partial_answers}), allow_partial=True)
+
+    expected = sum(full.factor(f).score for f in subset) / len(subset)
+    assert partial.overall_score == pytest.approx(expected)
+    assert partial.overall_score > 50, "a partial read of decent answers read as weak"
+
+
+def test_a_completed_assessment_is_unaffected_by_partial_support():
+    from src.scoring_engine import ScoringEngine
+
+    profile = CompanyProfile.from_dict({
+        "industry_sector": "Retail", "employee_band": "10-49",
+        "years_in_operation": "2-5 years", "region": "UAE",
+        "current_ai_stage": "Exploring",
+        **{i.id: 4 for i in cfg.ALL_ITEMS},
+    })
+    results = ScoringEngine().score(profile)
+    assert results.partial is False
+    assert len(results.factor_scores) == len(cfg.FACTORS)

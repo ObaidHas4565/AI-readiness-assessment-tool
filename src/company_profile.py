@@ -85,13 +85,24 @@ class CompanyProfile:
             if item.id in data:
                 responses[item.id] = data[item.id]
 
+        # Tidy the categorical answers here, at the one point every profile
+        # passes through, so a country typed into the form and the same
+        # country read from a CSV are stored identically. Without this, "UAE"
+        # from the questionnaire and "United Arab Emirates" from an import end
+        # up as two separate groups in the same analysis.
+        from .score_configuration import normalise_category
+
         return cls(
             responses=responses,
-            industry_sector=data.get("industry_sector"),
-            employee_band=data.get("employee_band"),
-            years_in_operation=data.get("years_in_operation"),
-            region=data.get("region"),
-            current_ai_stage=data.get("current_ai_stage"),
+            industry_sector=normalise_category(
+                "industry_sector", data.get("industry_sector")),
+            employee_band=normalise_category(
+                "employee_band", data.get("employee_band")),
+            years_in_operation=normalise_category(
+                "years_in_operation", data.get("years_in_operation")),
+            region=normalise_category("region", data.get("region")),
+            current_ai_stage=normalise_category(
+                "current_ai_stage", data.get("current_ai_stage")),
             open_biggest_barrier=data.get("open_biggest_barrier", "") or "",
             open_what_would_help=data.get("open_what_would_help", "") or "",
             open_additional_comments=data.get("open_additional_comments", "") or "",
@@ -188,6 +199,20 @@ class CompanyProfile:
     # ------------------------------------------------------------------
     # Context
     # ------------------------------------------------------------------
+
+    def notes(self) -> Dict[str, str]:
+        """
+        The written answers, keyed by the question that prompted them.
+
+        Never scored. They are where a respondent explains what a number
+        cannot, so they travel with the results and appear in the report.
+        """
+        written = {
+            "Biggest barrier to adopting AI": self.open_biggest_barrier,
+            "What would help most": self.open_what_would_help,
+            "Anything else": self.open_additional_comments,
+        }
+        return {q: a.strip() for q, a in written.items() if a and a.strip()}
 
     def context_summary(self) -> Dict[str, Optional[str]]:
         """Non-identifying context carried through onto the results object."""

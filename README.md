@@ -100,8 +100,8 @@ ai_readiness_tool/
 └── tests/
     ├── test_scoring.py            # 37 tests
     ├── test_synthetic_data.py     # 19 tests
-    ├── test_export_and_app.py     # 22 tests
-    └── test_survey_import.py      # 86 tests
+    ├── test_export_and_app.py     # 29 tests
+    └── test_survey_import.py      # 91 tests
 ```
 
 ---
@@ -157,7 +157,7 @@ You should see one Emerging (21.4), one Developing (57.1) and one Advanced
 pytest -v
 ```
 
-All 164 tests should pass. Run this after any change to the scoring logic or the configuration — it is much cheaper than checking output by hand.
+All 176 tests should pass. Run this after any change to the scoring logic or the configuration — it is much cheaper than checking output by hand.
 
 ### 6. Generate synthetic test data
 
@@ -205,9 +205,10 @@ change how they answer.
 nothing is written to the server's disk, which is what keeps the
 nothing-is-stored design intact.
 
-**PDF** — headline score and tier, factor bars, strengths, barriers, specific
-gaps, and the recommendations in priority order, plus a short note on how the
-score is calculated.
+**PDF** — headline score and tier, factor bars, the profile-shape radar,
+strengths, barriers, specific gaps, the recommendations in priority order, a
+question-by-question breakdown of all 32 answers, and whatever was written in
+the open questions.
 
 **Excel** — four sheets: `Summary`, `Factor scores`, `Responses` (every
 question with both the raw answer and the re-coded one, so the effect of
@@ -539,3 +540,36 @@ coverage of five factors, nothing at all on Data Readiness or Organizational
 Culture, and three questions that measure outcomes (whether AI has already
 improved services) rather than readiness. That comparison is useful for the
 evaluation chapter in a way that a fabricated score would not be.
+
+
+---
+
+## Partial coverage, and the dataset report
+
+A dataset that only answers some of the questions is scored on the factors it
+does cover. The overall figure is re-weighted across the factors present, so a
+factor nobody asked about is left out rather than counted as zero — the
+difference matters, because treating "not asked" as "answered badly" makes an
+incomplete dataset look like a weak one.
+
+Anything scored this way is marked as partial, on screen and in the report,
+with the missing factors named.
+
+The dataset tab produces its own PDF and Excel analysis, built from the same
+figures shown on screen — which is deliberate, since a report that disagrees
+with the page that produced it is worse than no report.
+
+**Profile shapes are split by country and by sector** whenever the data holds
+more than one of either. A single averaged radar across four countries draws a
+company that exists nowhere in the file.
+
+**Written answers are used, not just stored.** Comments are grouped by the
+readiness concepts they mention, using the same lexicon that matches questions,
+so "cost", "budget" and "can't afford it" count as one concern rather than
+three. Run against the first live survey, the ranking came out: governance and
+privacy raised by 8 respondents, getting started by 7, data quality by 6,
+skills and cost by 5 each.
+
+**Cohort recommendations** come from the average profile across the dataset,
+run through the same rules a single assessment uses, so the two can never
+drift apart.
