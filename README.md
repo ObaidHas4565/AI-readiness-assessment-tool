@@ -95,13 +95,15 @@ ai_readiness_tool/
 │   ├── synthetic_data.py          # test data generator
 │   ├── survey_import.py           # reads real survey exports, matches by meaning
 │   ├── open_value_checks.py       # is this a real country / industry?
+│   ├── text_analysis.py           # reads the written answers
 │   └── export_service.py          # PDF and Excel output
 ├── app.py                         # Streamlit dashboard
 └── tests/
     ├── test_scoring.py            # 37 tests
     ├── test_synthetic_data.py     # 19 tests
-    ├── test_export_and_app.py     # 29 tests
-    └── test_survey_import.py      # 91 tests
+    ├── test_export_and_app.py     # 36 tests
+    ├── test_text_analysis.py      # 42 tests
+    └── test_survey_import.py      # 92 tests
 ```
 
 ---
@@ -157,7 +159,7 @@ You should see one Emerging (21.4), one Developing (57.1) and one Advanced
 pytest -v
 ```
 
-All 176 tests should pass. Run this after any change to the scoring logic or the configuration — it is much cheaper than checking output by hand.
+All 226 tests should pass. Run this after any change to the scoring logic or the configuration — it is much cheaper than checking output by hand.
 
 ### 6. Generate synthetic test data
 
@@ -210,12 +212,33 @@ strengths, barriers, specific gaps, the recommendations in priority order, a
 question-by-question breakdown of all 32 answers, and whatever was written in
 the open questions.
 
-**Excel** — four sheets: `Summary`, `Factor scores`, `Responses` (every
+**Excel** — five sheets: `Summary`, `Factor scores`, `Responses` (every
 question with both the raw answer and the re-coded one, so the effect of
-reverse coding is visible), and `Recommendations`. `Factor scores` carries a
-bar chart and a radar of the profile; `Responses` carries a chart of all 32
-questions, which is where a factor with a decent average hiding one weak
-question shows up.
+reverse coding is visible), `Recommendations`, and `Written answers`.
+`Factor scores` carries a bar chart and a radar of the profile; `Responses`
+carries a chart of all 32 questions, which is where a factor with a decent
+average hiding one weak question shows up.
+
+Every chart names its axes and labels its values, and the radar carries the
+factor names round its edge. That last part needed work: openpyxl writes a
+category range as a *numeric* reference even when the categories are words,
+and Excel reads a numeric reference to a column of text as empty — which is
+why a chart built the plain way arrives with no labels on it at all. The
+categories are rewritten as string references in `_label_chart`.
+
+Score charts are fixed to a 0–100 axis rather than auto-scaled, so a six-point
+difference is drawn as six points and not as the whole width of the chart. The
+radars hide their value axis, because a radar draws that axis as a column of
+numbers straight down the middle of the shape; the rings still carry the scale.
+
+**A note on testing the charts.** The tests read the chart XML as a parsed
+tree, never as a string. openpyxl serialises through `lxml` when it is
+installed and through the standard library when it is not, and the two write
+empty elements differently — `<majorGridlines/>` against `<majorGridlines />`.
+The workbooks are identical as far as Excel is concerned; only the bytes
+differ. A test that matches the raw text therefore passes on one machine and
+fails on the next, which is exactly what happened here before these tests were
+rewritten to parse properly.
 
 Neither file contains a company name or any identifying detail, because
 `CompanyProfile` never collects any.
@@ -563,13 +586,72 @@ with the page that produced it is worse than no report.
 more than one of either. A single averaged radar across four countries draws a
 company that exists nowhere in the file.
 
-**Written answers are used, not just stored.** Comments are grouped by the
-readiness concepts they mention, using the same lexicon that matches questions,
-so "cost", "budget" and "can't afford it" count as one concern rather than
-three. Run against the first live survey, the ranking came out: governance and
-privacy raised by 8 respondents, getting started by 7, data quality by 6,
-skills and cost by 5 each.
+**Written answers are read, not just stored** — see the next section.
 
 **Cohort recommendations** come from the average profile across the dataset,
 run through the same rules a single assessment uses, so the two can never
 drift apart.
+
+---
+
+## What happens to the written answers
+
+The questionnaire's three open questions, and any free-text column found in an
+imported survey, are the only place a respondent can say something the 32 fixed
+questions never asked. `src/text_analysis.py` reads them.
+
+### Non-answers are thrown out first
+
+A real survey's free text is full of `N/A`, `none`, `no`, `yes`, `-` and
+blanks. Counting those as evidence of anything would be worse than ignoring the
+column, so they are discarded before anything is measured, together with
+answers too short to place (`good`, `not sure`, `more time`).
+
+The counts are reported rather than hidden — a tool that quietly drops half the
+answers and reports on the rest is reporting on a sample it has not described.
+Run against the first live survey: 39 answers seen, 27 used, 12 set aside
+(6 non-answers, 5 too short to place, 1 blank).
+
+**Shares are taken over everyone surveyed, not over the people whose answers
+could be read.** This was wrong first time round and worth naming: with 19
+people writing "nothing" and one writing about data quality, the wrong
+denominator reports that one person as 100% agreement.
+
+### What is left is placed against the factors
+
+Each remaining answer is matched to the readiness factor it concerns, using the
+concept lexicon that matches survey columns to questions, plus a supplementary
+vocabulary for the everyday words free text actually uses — a respondent writes
+"the internet here is slow", not "our IT infrastructure is inadequate". That
+supplementary list lives in `text_analysis.py` rather than in
+`CONCEPT_LEXICON`, because the lexicon feeds the IDF weighting used for column
+matching and adding words to it would move results that are already tested.
+
+### What it does, and the line it does not cross
+
+**It does not change any score.** The readiness score is a weighted average of
+Likert responses, and moving it on the strength of a keyword match would make
+it neither reproducible nor defensible. What the text changes is the
+interpretation:
+
+* every recommendation for a factor people wrote about carries their own words
+  beneath it as evidence, on screen and in both exports;
+* a factor the comments name repeatedly that **no score flagged** is added as
+  its own item, labelled *Raised in comments* and coloured differently from the
+  scored severities.
+
+That second one is the point of collecting free text at all. A disagreement
+between the numbers and the comments is a finding, and it is reported rather
+than smoothed away. On a dataset it needs 20% of respondents before it is
+raised, because one person out of two hundred is an anecdote; on a single
+assessment there is no share to reach, so any mention counts.
+
+### Limitations worth stating in the write-up
+
+* Matching is lexical. An answer that names a concern without using any of the
+  vocabulary, or one that uses a factor's words to say the opposite ("budget is
+  the one thing we *do* have"), will be placed wrongly. Polarity is not
+  detected.
+* The 20% threshold is a chosen starting value, not an empirically derived one.
+* Set-aside answers are counted but not inspected; a genuine answer written in
+  two words is lost along with the non-answers.

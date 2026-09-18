@@ -480,4 +480,19 @@ class RecommendationEngine:
         recommendations = recommendations[: self.cfg.MAX_RECOMMENDATIONS]
 
         results.recommendations = recommendations
-        return recommendations
+
+        # --- what the respondent wrote ---
+        # The scored rules above have now said everything the 32 questions can
+        # support. The written answers are read last, and they do two things:
+        # attach the respondent's own words to the actions already produced,
+        # and raise a factor the text names that no score flagged.
+        #
+        # This runs here, at the one point every caller passes through, so the
+        # dashboard and the exports cannot end up showing different advice for
+        # the same assessment. It never alters a score -- see text_analysis.
+        if results.notes:
+            from .text_analysis import analyse_single, apply_to_recommendations
+
+            apply_to_recommendations(results, analyse_single(results.notes))
+
+        return results.recommendations

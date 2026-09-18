@@ -423,3 +423,192 @@ def test_themes_group_the_written_answers_by_subject():
     themes = dict((name, count) for name, count, _ in extract_themes(notes))
     assert themes.get("Cost and funding", 0) == 3
     assert themes.get("Skills and training", 0) == 1
+
+
+# ---------------------------------------------------------------------------
+# Chart labelling
+# ---------------------------------------------------------------------------
+# The charts openpyxl produces the plain way come out with no labels round the
+# edge at all, because set_categories() writes a range of words as a *numeric*
+# reference and Excel reads that as empty. These tests guard the fix.
+#
+# They read the chart XML as a tree rather than as a string. Searching the raw
+# text looks simpler and is a trap: openpyxl serialises through lxml when it is
+# installed and through the standard library when it is not, and the two write
+# empty elements differently -- `<majorGridlines/>` against
+# `<majorGridlines />`. The workbooks are identical to Excel; only the bytes
+# differ. A test matching the text passes on one machine and fails on the next.
+
+CHART_NS = "{http://schemas.openxmlformats.org/drawingml/2006/chart}"
+
+
+def _charts(data: bytes, kind: str = ""):
+    """
+    Every chart in a workbook, parsed. `kind` filters by chart type, e.g.
+    "radarChart" or "barChart".
+    """
+    import xml.etree.ElementTree as ElementTree
+
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        trees = [ElementTree.fromstring(archive.read(name))
+                 for name in archive.namelist()
+                 if name.startswith("xl/charts/chart")
+                 and name.endswith(".xml")]
+
+    if kind:
+        trees = [t for t in trees if t.find(f".//{CHART_NS}{kind}") is not None]
+    return trees
+
+
+def _axis(chart, name: str):
+    """A chart's category ("catAx") or value ("valAx") axis."""
+    return chart.find(f".//{CHART_NS}{name}")
+
+
+def _flag(element, name: str):
+    """The val="..." of a child element, or None if it isn't there."""
+    child = element.find(f"{CHART_NS}{name}") if element is not None else None
+    return child.get("val") if child is not None else None
+
+
+def test_every_chart_labels_its_categories_with_text(mixed_results):
+    """
+    The factor names have to reach the chart as text. Written as a numeric
+    reference they silently disappear, which is what left the profile shape
+    with no factor labels on it.
+    """
+    charts = _charts(to_excel_bytes(mixed_results))
+    assert charts
+
+    for chart in charts:
+        categories = chart.findall(f".//{CHART_NS}cat")
+        assert categories, "a chart with no categories at all"
+        for category in categories:
+            assert category.find(f"{CHART_NS}strRef") is not None, \
+                "categories written as numbers -- the labels will be blank"
+            assert category.find(f"{CHART_NS}numRef") is None
+
+
+def test_the_radar_carries_the_readiness_factor_names(mixed_results):
+    charts = _charts(to_excel_bytes(mixed_results), "radarChart")
+    assert charts, "the profile shape should be in the workbook"
+
+    for chart in charts:
+        assert chart.find(f".//{CHART_NS}cat/{CHART_NS}strRef") is not None
+        # The category axis carries the factor names, so it must be drawn.
+        assert _flag(_axis(chart, "catAx"), "delete") == "0"
+
+
+def test_the_radar_does_not_print_its_scale_down_the_middle(mixed_results):
+    """
+    A radar draws its value axis as a column of numbers through the centre of
+    the shape, on top of the fill. The rings carry the scale instead.
+    """
+    charts = _charts(to_excel_bytes(mixed_results), "radarChart")
+    assert charts
+
+    for chart in charts:
+        value_axis = _axis(chart, "valAx")
+        assert _flag(value_axis, "delete") == "1", "0-100 printed over the shape"
+        # Hiding the axis must not take the rings with it.
+        assert value_axis.find(f"{CHART_NS}majorGridlines") is not None
+
+
+def test_bar_charts_show_their_values_and_name_their_axes(mixed_results):
+    charts = _charts(to_excel_bytes(mixed_results), "barChart")
+    assert charts
+
+    for chart in charts:
+        labels = chart.find(f".//{CHART_NS}dLbls")
+        assert labels is not None, "no value labels on a bar chart"
+        assert _flag(labels, "showVal") == "1"
+        # Only the value. Left unset, some readers add the series and category
+        # names too and the label sprawls across its neighbours.
+        assert _flag(labels, "showSerName") == "0"
+        assert _flag(labels, "showCatName") == "0"
+
+
+def test_the_dataset_workbook_is_labelled_the_same_way():
+    from src.export_service import dataset_excel_bytes, summarise_dataset
+
+    scored, profiles = _small_cohort()
+    charts = _charts(dataset_excel_bytes(summarise_dataset(scored, profiles)))
+
+    assert charts
+    for chart in charts:
+        for category in chart.findall(f".//{CHART_NS}cat"):
+            assert category.find(f"{CHART_NS}strRef") is not None
+            assert category.find(f"{CHART_NS}numRef") is None
+
+
+def test_the_dataset_workbook_splits_the_shape_by_group():
+    """
+    A radar per country and per sector, matching the PDF -- one averaged
+    shape across several of them describes a company that does not exist.
+    """
+    from src.export_service import dataset_excel_bytes, summarise_dataset
+
+    scored, profiles = _small_cohort()
+    data = dataset_excel_bytes(summarise_dataset(scored, profiles))
+
+    radars = _charts(data, "radarChart")
+    grouped = [r for r in radars
+               if len(r.findall(f".//{CHART_NS}ser")) > 1]
+    assert grouped, "expected a radar holding one series per group"
+
+
+# ---------------------------------------------------------------------------
+# Where the explanation sits
+# ---------------------------------------------------------------------------
+
+def _pdf_text(data: bytes) -> str:
+    pypdf = pytest.importorskip("pypdf")
+    reader = pypdf.PdfReader(io.BytesIO(data))
+    return "\n".join(page.extract_text() or "" for page in reader.pages)
+
+
+def test_the_scoring_explanation_comes_before_the_scores(mixed_results):
+    """
+    An explanation printed after the figures it explains has been read too
+    late to be any use.
+    """
+    text = _pdf_text(to_pdf_bytes(mixed_results))
+    explanation = text.find("How the score is calculated")
+    scores = text.find("Readiness by factor")
+
+    assert explanation != -1 and scores != -1
+    assert explanation < scores
+
+
+def test_the_dataset_explanation_comes_first_too():
+    from src.export_service import dataset_pdf_bytes, summarise_dataset
+
+    scored, profiles = _small_cohort()
+    text = _pdf_text(dataset_pdf_bytes(summarise_dataset(scored, profiles)))
+
+    explanation = text.find("How to read this")
+    scores = text.find("Average score by factor")
+
+    assert explanation != -1 and scores != -1
+    assert explanation < scores
+
+
+def test_the_dashboard_shows_what_the_written_answers_were_read_as():
+    """
+    The three open questions used to be collected and then printed back
+    unread. Submitting one now has to reach the results view.
+    """
+    app = run_app()
+    app.session_state["open_biggest_barrier"] = (
+        "Cost is the biggest issue and we have no budget set aside."
+    )
+    app = fill_in(app, lambda item: 3)
+    app.button[0].click().run()
+
+    assert not app.exception
+    results = app.session_state["results"]
+    assert results.text_insights is not None
+    assert results.text_insights.signal("budget") is not None
+
+    body = " ".join(str(element.value) for element in app.markdown)
+    assert "In your own words" in body

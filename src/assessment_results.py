@@ -95,6 +95,12 @@ class Recommendation:
     triggered_by_item: Optional[str] = None
     priority: float = 0.0  # higher == address sooner
 
+    # The respondent's own words on this factor, where they wrote any. These
+    # do not change the recommendation -- they are shown beside it so a reader
+    # can see what the people in the data said about the area being flagged.
+    evidence: List[str] = field(default_factory=list)
+    evidence_count: int = 0
+
     def __str__(self) -> str:  # pragma: no cover - display helper
         return f"[{self.severity}] {self.factor_name} - {self.title}"
 
@@ -129,6 +135,11 @@ class AssessmentResults:
     # What the respondent wrote in their own words. Never scored, but shown
     # alongside the scores because it usually explains them.
     notes: Dict[str, str] = field(default_factory=dict)
+
+    # What reading those written answers found: which factors they name, and
+    # how many were discarded as non-answers. Populated by text_analysis, and
+    # deliberately kept off the score -- see that module's header for why.
+    text_insights: Any = None
 
     # ------------------------------------------------------------------
     # Convenience accessors used by the dashboard and export service
@@ -194,6 +205,8 @@ class AssessmentResults:
                     "title": r.title,
                     "action": r.action,
                     "triggered_by_item": r.triggered_by_item,
+                    "evidence": list(r.evidence),
+                    "evidence_count": r.evidence_count,
                 }
                 for r in self.recommendations
             ],

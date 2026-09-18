@@ -20,11 +20,12 @@ from __future__ import annotations
 import io
 import math
 from datetime import datetime
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from xml.sax.saxutils import escape
 
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, RadarChart, Reference
+from openpyxl.chart.data_source import AxDataSource, StrRef
 from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -63,12 +64,17 @@ SEVERITY_COLOURS: Dict[str, str] = {
     "critical": "C0392B",
     "moderate": "D68910",
     "refine": "2874A6",
+    # Raised by the written answers rather than by a score crossing a
+    # threshold. Purple keeps it visually distinct from the scored severities,
+    # because the evidence behind it is a different kind of evidence.
+    "raised": "7D3C98",
 }
 
 SEVERITY_LABELS: Dict[str, str] = {
     "critical": "Critical",
     "moderate": "Moderate",
     "refine": "Refine",
+    "raised": "Raised in comments",
 }
 
 # Nicer headings than the raw field names for the context block.
@@ -171,6 +177,29 @@ def _score_bar(score: float, width: float, colour: str) -> Table:
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
     return bar
+
+
+def _evidence_markup(rec, single: bool = False) -> str:
+    """
+    The respondents' own words, rendered under the recommendation they support.
+
+    An action carries more weight when the reader can see it agrees with what
+    someone actually wrote, and it is worth seeing when it does not. The quotes
+    are evidence for the recommendation, never an input to the score.
+    """
+    if not getattr(rec, "evidence", None):
+        return ""
+
+    if single:
+        lead = "In your own words:"
+    else:
+        people = "respondent" if rec.evidence_count == 1 else "respondents"
+        lead = f"Raised in writing by {rec.evidence_count} {people}:"
+
+    quotes = "".join(
+        f'<br/><i>&ldquo;{escape(quote)}&rdquo;</i>' for quote in rec.evidence
+    )
+    return (f'<br/><br/><font size="8" color="#777777">{lead}{quotes}</font>')
 
 
 def _radar_drawing(scores: List[Tuple[str, float]], colour: str,
@@ -294,6 +323,21 @@ def to_pdf_bytes(results: AssessmentResults) -> bytes:
     if context_pairs:
         story.append(Spacer(1, 7))
         story.append(Paragraph("&nbsp;&nbsp;|&nbsp;&nbsp;".join(context_pairs), s["small"]))
+
+    # --- how to read it ---------------------------------------------------
+    # Placed before the scores rather than after them: the reader meets a
+    # number out of 100 on the next line, and needs to know what produced it
+    # at that moment, not on the last page.
+    story.append(Paragraph("How the score is calculated", s["h2"]))
+    story.append(Paragraph(
+        f"Each of the {len(cfg.FACTORS)} factors is scored from the answers "
+        f"given to its questions, on a 1&ndash;5 agreement scale, converted to "
+        f"a 0&ndash;100 scale. Questions worded as barriers are reversed first, "
+        f"so a higher score always means more ready. The overall score is the "
+        f"weighted average of the factor scores. Bands: Emerging 0&ndash;40, "
+        f"Developing 40&ndash;70, Advanced 70&ndash;100.",
+        s["small"],
+    ))
 
     # --- factor scores ----------------------------------------------------
     story.append(Paragraph("Readiness by factor", s["h2"]))
@@ -423,7 +467,8 @@ def to_pdf_bytes(results: AssessmentResults) -> bytes:
                     f'<font color="#{colour}"><b>{index}. {escape(label)}</b></font>'
                     f'&nbsp;&nbsp;<font color="#777777" size="8">{source}</font><br/>'
                     f'<b>{escape(rec.title)}</b><br/>'
-                    f'{escape(rec.action)}',
+                    f'{escape(rec.action)}'
+                    f'{_evidence_markup(rec, single=True)}',
                     s["body"],
                 )]],
                 colWidths=[content_width],
@@ -493,17 +538,20 @@ def to_pdf_bytes(results: AssessmentResults) -> bytes:
             story.append(Paragraph(escape(answer), s["body"]))
             story.append(Spacer(1, 5))
 
-    # --- how to read it ---------------------------------------------------
-    story.append(Paragraph("How the score is calculated", s["h2"]))
-    story.append(Paragraph(
-        f"Each of the {len(cfg.FACTORS)} factors is scored from the answers "
-        f"given to its questions, on a 1&ndash;5 agreement scale, converted to "
-        f"a 0&ndash;100 scale. Questions worded as barriers are reversed first, "
-        f"so a higher score always means more ready. The overall score is the "
-        f"weighted average of the factor scores. Bands: Emerging 0&ndash;40, "
-        f"Developing 40&ndash;70, Advanced 70&ndash;100.",
-        s["small"],
-    ))
+        insights = results.text_insights
+        if insights is not None and insights.by_factor:
+            named = ", ".join(escape(sig.factor_name)
+                              for sig in insights.by_factor)
+            story.append(Paragraph(
+                f"<b>Read as being about:</b> {named}. Where one of these was "
+                f"not already flagged by the scores, it appears in the actions "
+                f"above marked as raised in comments.", s["small"]))
+        elif insights is not None and insights.answers_dropped:
+            story.append(Paragraph(
+                f"{insights.answers_dropped} of {insights.answers_seen} "
+                f"written answers said nothing specific and were not used.",
+                s["small"]))
+
     story.append(Spacer(1, 10))
     story.append(Paragraph(
         "This assessment is based on self-reported answers and is intended to "
@@ -545,6 +593,65 @@ def _write_header(sheet, row: int, headers: List[str]) -> None:
 def _set_widths(sheet, widths: List[Tuple[int, int]]) -> None:
     for column, width in widths:
         sheet.column_dimensions[get_column_letter(column)].width = width
+
+
+def _label_chart(chart, categories: Reference, *,
+                 category_title: Optional[str] = None,
+                 value_title: Optional[str] = None,
+                 show_values: bool = True,
+                 value_axis: bool = True,
+                 value_range: Optional[Tuple[float, float]] = None) -> None:
+    """
+    Give a chart its category labels, axis titles and value labels.
+
+    The category part is not cosmetic. openpyxl's set_categories() always
+    writes the range as a *numeric* reference, and the categories here are
+    words -- factor names, item codes, country names. Excel reads a numeric
+    reference to a column of text as empty, which is why a chart built the
+    plain way comes out with no labels round the edge at all. Rewriting the
+    reference as a string reference is what puts the names back.
+
+    The axes are also marked explicitly as not deleted, because an axis left
+    unspecified is not guaranteed to be drawn.
+    """
+    chart.set_categories(categories)
+
+    source = AxDataSource(strRef=StrRef(f=categories))
+    for series in chart.series:
+        series.cat = source
+
+    if category_title:
+        chart.x_axis.title = category_title
+    if value_title:
+        chart.y_axis.title = value_title
+
+    chart.x_axis.delete = False
+    # A radar draws its value axis as a column of numbers straight down the
+    # middle of the shape, on top of the fill. Hiding the axis removes those
+    # while leaving the rings, which are a separate element and are what
+    # actually convey the scale -- the range is in the chart title instead.
+    chart.y_axis.delete = not value_axis
+
+    if value_range is not None:
+        # A score chart that starts at the lowest value present makes a six
+        # point difference look like the whole range. Fixing the axis to
+        # 0-100 keeps the bars proportional to the scores they represent.
+        chart.y_axis.scaling.min, chart.y_axis.scaling.max = value_range
+
+    if show_values:
+        # Every flag is set explicitly. Left unset, some readers take "not
+        # specified" as "show", and the label becomes
+        # "Budget & Financial Readiness; Mean score; 55.9" sprawled across
+        # its neighbours. Only the number is wanted -- the category is
+        # already on the axis.
+        labels = DataLabelList()
+        labels.showVal = True
+        labels.showSerName = False
+        labels.showCatName = False
+        labels.showLegendKey = False
+        labels.showPercent = False
+        labels.showBubbleSize = False
+        chart.dataLabels = labels
 
 
 def to_excel_bytes(results: AssessmentResults) -> bytes:
@@ -611,10 +718,11 @@ def to_excel_bytes(results: AssessmentResults) -> bytes:
 
     # --- Factor scores ----------------------------------------------------
     factors = workbook.create_sheet("Factor scores")
-    _set_widths(factors, [(1, 40), (2, 12), (3, 14), (4, 10), (5, 14), (6, 20)])
+    _set_widths(factors, [(1, 40), (2, 12), (3, 14), (4, 10), (5, 14), (6, 20),
+                          (7, 14)])
     _write_header(factors, 1, [
         "Factor", "Score /100", "Mean (1-5)", "Weight",
-        "Contribution", "Band",
+        "Contribution", "Band", "Short label",
     ])
 
     for index, factor in enumerate(results.ordered_factors(), start=2):
@@ -626,7 +734,12 @@ def to_excel_bytes(results: AssessmentResults) -> bytes:
         band = factors.cell(row=index, column=6, value=factor.band_label)
         band.font = Font(bold=True,
                          color=BAND_COLOURS.get(factor.band_label, "000000"))
-        for column in range(1, 7):
+        # Used as the radar's category labels: the full names overlap round a
+        # radar, and the column makes the abbreviation traceable.
+        factors.cell(row=index, column=7,
+                     value=SHORT_FACTOR_LABELS.get(factor.factor_id,
+                                                   factor.factor_id))
+        for column in range(1, 8):
             factors.cell(row=index, column=column).border = _BORDER
 
     total_row = len(results.factor_scores) + 2
@@ -643,24 +756,27 @@ def to_excel_bytes(results: AssessmentResults) -> bytes:
     last = len(results.factor_scores) + 1
     labels = Reference(factors, min_col=1, min_row=2, max_row=last)
     values = Reference(factors, min_col=2, min_row=1, max_row=last)
+    short_labels = Reference(factors, min_col=7, min_row=2, max_row=last)
 
     bars = BarChart()
     bars.type = "bar"
-    bars.title = "Readiness by factor"
-    bars.y_axis.title = "Score /100"
+    bars.title = "Readiness by factor (0-100)"
     bars.add_data(values, titles_from_data=True)
-    bars.set_categories(labels)
-    bars.dataLabels = DataLabelList()
-    bars.dataLabels.showVal = True
+    _label_chart(bars, labels,
+                 category_title="Readiness factor",
+                 value_title="Score /100", value_range=(0, 100))
     bars.height, bars.width = 9, 20
     bars.legend = None
     factors.add_chart(bars, f"A{last + 3}")
 
     shape = RadarChart()
     shape.type = "filled"
-    shape.title = "Profile shape"
+    shape.title = "Profile shape (0-100 by factor)"
     shape.add_data(values, titles_from_data=True)
-    shape.set_categories(labels)
+    # No value labels on the radar -- a filled radar draws them on top of the
+    # fill, and the bar chart beside it already carries the numbers. The
+    # category labels are the point here.
+    _label_chart(shape, short_labels, show_values=False, value_axis=False)
     shape.height, shape.width = 11, 11
     shape.y_axis.scaling.min = 0
     shape.y_axis.scaling.max = 100
@@ -704,8 +820,12 @@ def to_excel_bytes(results: AssessmentResults) -> bytes:
         Reference(responses, min_col=7, min_row=1, max_row=item_rows),
         titles_from_data=True,
     )
-    item_chart.set_categories(
-        Reference(responses, min_col=1, min_row=2, max_row=item_rows)
+    _label_chart(
+        item_chart,
+        Reference(responses, min_col=1, min_row=2, max_row=item_rows),
+        category_title="Question",
+        value_title="Score /100",
+        value_range=(0, 100),
     )
     item_chart.height, item_chart.width = 20, 20
     item_chart.legend = None
@@ -713,9 +833,11 @@ def to_excel_bytes(results: AssessmentResults) -> bytes:
 
     # --- Recommendations --------------------------------------------------
     recs = workbook.create_sheet("Recommendations")
-    _set_widths(recs, [(1, 9), (2, 12), (3, 32), (4, 40), (5, 70), (6, 14)])
+    _set_widths(recs, [(1, 9), (2, 18), (3, 32), (4, 40), (5, 70), (6, 14),
+                       (7, 60)])
     _write_header(recs, 1, [
         "Priority", "Severity", "Factor", "Action", "Detail", "Triggered by",
+        "Supporting words from the response",
     ])
 
     if results.recommendations:
@@ -731,7 +853,10 @@ def to_excel_bytes(results: AssessmentResults) -> bytes:
             detail = recs.cell(row=row, column=5, value=rec.action)
             detail.alignment = Alignment(wrap_text=True, vertical="top")
             recs.cell(row=row, column=6, value=rec.triggered_by_item or "factor overall")
-            for column in range(1, 7):
+            quotes = recs.cell(row=row, column=7,
+                               value="\n".join(f"“{q}”" for q in rec.evidence))
+            quotes.alignment = Alignment(wrap_text=True, vertical="top")
+            for column in range(1, 8):
                 recs.cell(row=row, column=column).border = _BORDER
             recs.row_dimensions[row].height = 42
     else:
@@ -739,6 +864,39 @@ def to_excel_bytes(results: AssessmentResults) -> bytes:
                   value="No actions flagged -- every factor is at or above the "
                         "Advanced threshold.")
     recs.freeze_panes = "A2"
+
+    # --- Written answers --------------------------------------------------
+    # The three open questions, and what reading them found. Kept on their own
+    # sheet so the free text is available in full alongside how it was read.
+    if results.notes:
+        written = workbook.create_sheet("Written answers")
+        _set_widths(written, [(1, 42), (2, 90), (3, 20)])
+        _write_header(written, 1, ["Question", "Answer", "Read as being about"])
+
+        insights = results.text_insights
+        placed = ", ".join(s.factor_name for s in insights.by_factor) \
+            if insights is not None else ""
+
+        row = 2
+        for question, answer in results.notes.items():
+            written.cell(row=row, column=1, value=question)
+            cell = written.cell(row=row, column=2, value=answer)
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+            written.row_dimensions[row].height = 40
+            row += 1
+
+        row += 1
+        written.cell(row=row, column=1,
+                     value="Factors named in the written answers").font = _TITLE_FONT
+        row += 1
+        written.cell(row=row, column=1, value=placed or "none identified")
+        row += 2
+        written.cell(row=row, column=1, value=(
+            "These answers are not scored. They are used to attach your own "
+            "words to the recommendations, and to raise a factor you wrote "
+            "about that the scores did not flag."
+        ))
+        written.cell(row=row, column=1).font = Font(size=9, color="777777")
 
     buffer = io.BytesIO()
     workbook.save(buffer)
@@ -834,6 +992,9 @@ class DatasetSummary:
     recommendation_counts: List[Tuple[str, int]] = _field(default_factory=list)
     themes: List[Tuple[str, int, List[str]]] = _field(default_factory=list)
     notes: List[Tuple[str, Dict[str, str]]] = _field(default_factory=list)
+    # What reading the written answers found -- which factors they name, and
+    # how many were set aside as non-answers.
+    text_insights: Any = None
     source_name: str = ""
 
     @property
@@ -902,7 +1063,7 @@ def extract_themes(notes: Sequence[Tuple[str, Dict[str, str]]],
     }
 
     counts: Dict[str, int] = {}
-    examples: Dict[str, List[str]] = {}
+    candidates: Dict[str, List[str]] = {}
 
     for _, answers in notes:
         text = " ".join(answers.values())
@@ -910,16 +1071,27 @@ def extract_themes(notes: Sequence[Tuple[str, Dict[str, str]]],
             term[1:] for term in _terms(text)
             if term.startswith("~") and term[1:] in readable
         }
+        snippet = " ".join(text.split())
+        snippet = snippet[:160] + ("…" if len(snippet) > 160 else "")
         for concept in mentioned:
             counts[concept] = counts.get(concept, 0) + 1
-            if len(examples.setdefault(concept, [])) < 2:
-                snippet = " ".join(text.split())
-                examples[concept].append(
-                    snippet[:160] + ("…" if len(snippet) > 160 else "")
-                )
+            candidates.setdefault(concept, []).append(snippet)
 
     ranked = sorted(counts.items(), key=lambda kv: -kv[1])[:limit]
-    return [(readable[c], n, examples.get(c, [])) for c, n in ranked]
+
+    # One long answer often mentions four subjects at once, and quoting it
+    # under all four makes the section read as if the same person said
+    # everything. A theme takes a quote nothing else has used where it has one.
+    used: set = set()
+    themes: List[Tuple[str, int, List[str]]] = []
+    for concept, count in ranked:
+        pool = candidates.get(concept, [])
+        fresh = [quote for quote in pool if quote not in used]
+        chosen = (fresh or pool)[:2]
+        used.update(chosen)
+        themes.append((readable[concept], count, chosen))
+
+    return themes
 
 
 def cohort_results(scored) -> AssessmentResults:
@@ -1022,8 +1194,17 @@ def summarise_dataset(scored, profiles_by_id,
         for rec in result.recommendations:
             rec_counts[rec.title] = rec_counts.get(rec.title, 0) + 1
 
+    from .text_analysis import analyse_notes, apply_to_recommendations
+
     average = cohort_results(scored)
     RecommendationEngine().recommend(average)
+
+    # The cohort's advice comes from the scored average, then the whole
+    # dataset's written answers are read against it: the quotes attach to the
+    # actions they support, and a factor many people write about but no score
+    # flagged is added as its own, separately labelled item.
+    insights = analyse_notes(notes)
+    apply_to_recommendations(average, insights)
 
     return DatasetSummary(
         count=len(results),
@@ -1046,6 +1227,7 @@ def summarise_dataset(scored, profiles_by_id,
         recommendation_counts=sorted(rec_counts.items(), key=lambda kv: -kv[1])[:10],
         themes=extract_themes(notes),
         notes=notes,
+        text_insights=insights,
         source_name=source_name,
     )
 
@@ -1099,6 +1281,19 @@ def dataset_pdf_bytes(summary: DatasetSummary) -> bytes:
             "cover and re-weighted across them."
             + (f" No reading was possible for: {escape(absent)}." if absent else ""),
             s["small"]))
+
+    # --- how to read it ---------------------------------------------------
+    # At the top, not the back. Every number below is on a scale the reader has
+    # no reason to already know, and an explanation placed after the figures it
+    # explains has been read too late to be any use.
+    story.append(Paragraph("How to read this", s["h2"]))
+    story.append(Paragraph(
+        "Each factor is scored from its questions on a 1&ndash;5 agreement "
+        "scale converted to 0&ndash;100, with barrier-worded questions "
+        "reversed first, so a higher score always means more ready. Group "
+        "figures are means, and a group of one company is that company rather "
+        "than an average. Bands: Emerging 0&ndash;40, Developing 40&ndash;70, "
+        "Advanced 70&ndash;100.", s["small"]))
 
     # --- factor averages --------------------------------------------------
     story.append(Paragraph("Average score by factor", s["h2"]))
@@ -1182,7 +1377,8 @@ def dataset_pdf_bytes(summary: DatasetSummary) -> bytes:
                 f'<font color="#{colour}"><b>{index}. {escape(label)}</b></font>'
                 f'&nbsp;&nbsp;<font color="#777777" size="8">'
                 f'{escape(rec.factor_name)}</font><br/>'
-                f'<b>{escape(rec.title)}</b><br/>{escape(rec.action)}', s["body"])]],
+                f'<b>{escape(rec.title)}</b><br/>{escape(rec.action)}'
+                f'{_evidence_markup(rec)}', s["body"])]],
                 colWidths=[width])
             block.setStyle(TableStyle([
                 ("LINEBEFORE", (0, 0), (0, 0), 2.5, colors.HexColor("#" + colour)),
@@ -1195,12 +1391,54 @@ def dataset_pdf_bytes(summary: DatasetSummary) -> bytes:
             story.append(Spacer(1, 5))
 
     # --- what people wrote ------------------------------------------------
+    insights = summary.text_insights
+    if insights is not None and insights.used:
+        story.append(Paragraph("Which factors the written answers name", s["h2"]))
+        story.append(Paragraph(
+            f"{insights.answers_used} of {insights.answers_seen} written "
+            f"answers said something specific; the remaining "
+            f"{insights.answers_dropped} were blanks or non-answers "
+            f"(&ldquo;N/A&rdquo;, &ldquo;none&rdquo;, &ldquo;no&rdquo;) and "
+            f"were set aside rather than counted. Each remaining answer is "
+            f"placed against the readiness factor it talks about, so the "
+            f"comments can be compared with the scores. Shares below are of "
+            f"all {insights.total_respondents} respondents, not only those "
+            f"whose answers could be read. They do not change any score.",
+            s["small"]))
+        story.append(Spacer(1, 5))
+
+        rows = [[
+            Paragraph("<b>Factor</b>", s["small"]),
+            Paragraph("<b>Raised by</b>", s["small"]),
+            Paragraph("<b>Mean score</b>", s["small"]),
+        ]]
+        means = dict(summary.factor_means)
+        for signal in insights.by_factor:
+            score = means.get(signal.factor_id)
+            rows.append([
+                Paragraph(escape(signal.factor_name), s["small"]),
+                Paragraph(f"{signal.mentions} of {insights.total_respondents} "
+                          f"({signal.share:.0f}%)", s["small"]),
+                Paragraph(f"{score:.1f}/100" if score is not None
+                          else "not scored", s["small"]),
+            ])
+        placement = Table(rows, colWidths=[width - 76 * mm, 42 * mm, 34 * mm])
+        placement.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (0, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LINEBELOW", (0, 0), (-1, -2), 0.4, colors.HexColor("#EAEAEA")),
+        ]))
+        story.append(placement)
+
     if summary.themes:
         story.append(Paragraph("What respondents raised themselves", s["h2"]))
         story.append(Paragraph(
             f"Grouped from the written answers in {len(summary.notes)} "
-            f"responses. These are not scored, and they often name things the "
-            f"scored questions do not reach.", s["small"]))
+            f"responses, by subject rather than by word, so &ldquo;cost&rdquo;, "
+            f"&ldquo;budget&rdquo; and &ldquo;can't afford it&rdquo; count as "
+            f"one concern.", s["small"]))
         story.append(Spacer(1, 5))
         for name, count, examples in summary.themes:
             share = count / max(1, len(summary.notes)) * 100
@@ -1211,14 +1449,6 @@ def dataset_pdf_bytes(summary: DatasetSummary) -> bytes:
                 story.append(Paragraph(
                     f'<i>&ldquo;{escape(example)}&rdquo;</i>', s["small"]))
             story.append(Spacer(1, 5))
-
-    story.append(Paragraph("How to read this", s["h2"]))
-    story.append(Paragraph(
-        "Each factor is scored from its questions on a 1&ndash;5 agreement "
-        "scale converted to 0&ndash;100, with barrier-worded questions "
-        "reversed first. Group figures are means, and a group of one company "
-        "is that company rather than an average. Bands: Emerging 0&ndash;40, "
-        "Developing 40&ndash;70, Advanced 70&ndash;100.", s["small"]))
 
     doc.build(story)
     return buffer.getvalue()
@@ -1267,43 +1497,53 @@ def dataset_excel_bytes(summary: DatasetSummary) -> bytes:
     tiers.title = "Companies by readiness tier"
     tiers.add_data(Reference(overview, min_col=2, min_row=tier_start,
                              max_row=row - 1), titles_from_data=True)
-    tiers.set_categories(Reference(overview, min_col=1, min_row=tier_start + 1,
-                                   max_row=row - 1))
+    _label_chart(tiers,
+                 Reference(overview, min_col=1, min_row=tier_start + 1,
+                           max_row=row - 1),
+                 category_title="Readiness tier",
+                 value_title="Number of companies")
     tiers.height, tiers.width, tiers.legend = 8, 14, None
     overview.add_chart(tiers, f"E{tier_start}")
 
     # --- factors ----------------------------------------------------------
     factors = workbook.create_sheet("Factor averages")
-    _set_widths(factors, [(1, 42), (2, 14), (3, 14)])
-    _write_header(factors, 1, ["Factor", "Mean score", "Band"])
+    _set_widths(factors, [(1, 42), (2, 14), (3, 14), (4, 14)])
+    # The short label is a real column rather than something the chart invents,
+    # so the reader can see which abbreviation belongs to which factor.
+    _write_header(factors, 1, ["Factor", "Mean score", "Band", "Short label"])
     for index, (factor_id, mean) in enumerate(summary.factor_means, start=2):
         band = cfg.band_for_score(mean).label
         factors.cell(row=index, column=1, value=cfg.FACTORS_BY_ID[factor_id].name)
         factors.cell(row=index, column=2, value=round(mean, 1))
         cell = factors.cell(row=index, column=3, value=band)
         cell.font = Font(bold=True, color=BAND_COLOURS.get(band, "000000"))
-        for column in range(1, 4):
+        factors.cell(row=index, column=4,
+                     value=SHORT_FACTOR_LABELS.get(factor_id, factor_id))
+        for column in range(1, 5):
             factors.cell(row=index, column=column).border = _BORDER
 
     last = len(summary.factor_means) + 1
     labels = Reference(factors, min_col=1, min_row=2, max_row=last)
     values = Reference(factors, min_col=2, min_row=1, max_row=last)
+    # Full names round a radar overlap into each other; the bar chart has the
+    # room for them and the radar does not.
+    short_labels = Reference(factors, min_col=4, min_row=2, max_row=last)
 
     bars = BarChart()
     bars.type = "bar"
-    bars.title = "Average score by factor"
+    bars.title = "Average score by factor (0-100)"
     bars.add_data(values, titles_from_data=True)
-    bars.set_categories(labels)
-    bars.dataLabels = DataLabelList()
-    bars.dataLabels.showVal = True
+    _label_chart(bars, labels,
+                 category_title="Readiness factor",
+                 value_title="Mean score /100", value_range=(0, 100))
     bars.height, bars.width, bars.legend = 9, 20, None
     factors.add_chart(bars, f"A{last + 3}")
 
     shape = RadarChart()
     shape.type = "filled"
-    shape.title = "Average profile shape"
+    shape.title = "Average profile shape (0-100 by factor)"
     shape.add_data(values, titles_from_data=True)
-    shape.set_categories(labels)
+    _label_chart(shape, short_labels, show_values=False, value_axis=False)
     shape.y_axis.scaling.min, shape.y_axis.scaling.max = 0, 100
     shape.height, shape.width = 11, 11
     factors.add_chart(shape, f"H{last + 3}")
@@ -1331,20 +1571,74 @@ def dataset_excel_bytes(summary: DatasetSummary) -> bytes:
                            value=round(value, 1) if value is not None else None)
 
         end = len(groups) + 1
+        sheet.freeze_panes = "A2"
+
+        # A second, smaller block holding just the factor scores, which is what
+        # the radar is drawn from. A radar needs the factor columns directly
+        # beside the group name and the table above has the count and the mean
+        # in between, so the numbers are laid out once more in the shape the
+        # chart can read. Short labels, because full factor names overlap each
+        # other round a radar.
+        present = [factor_id for factor_id, _ in summary.factor_means]
+        shown = min(len(groups), 6)
+        split = bool(present) and len(groups) > 1
+
+        chart_row = end + 3
+        head = 0
+        if split:
+            sheet.cell(row=end + 2, column=1,
+                       value=f"Profile shape data ({title.lower()})").font = _TITLE_FONT
+            head = end + 3
+            _write_header(sheet, head, ["Group"] + [
+                SHORT_FACTOR_LABELS.get(f, f) for f in present])
+            for offset, group in enumerate(groups[:6], start=1):
+                means = dict(group.factor_means)
+                sheet.cell(row=head + offset, column=1, value=group.label)
+                for column, factor_id in enumerate(present, start=2):
+                    value = means.get(factor_id)
+                    sheet.cell(row=head + offset, column=column,
+                               value=round(value, 1) if value is not None else 0)
+            chart_row = head + shown + 2
+
         chart = BarChart()
         chart.type = "col"
         chart.title = f"Mean readiness {title.lower()}"
         chart.add_data(Reference(sheet, min_col=3, min_row=1, max_row=end),
                        titles_from_data=True)
-        chart.set_categories(Reference(sheet, min_col=1, min_row=2, max_row=end))
+        _label_chart(chart,
+                     Reference(sheet, min_col=1, min_row=2, max_row=end),
+                     category_title=headers[0],
+                     value_title="Mean score /100", value_range=(0, 100))
         chart.height, chart.width, chart.legend = 8, 18, None
-        sheet.add_chart(chart, f"A{end + 3}")
-        sheet.freeze_panes = "A2"
+        sheet.add_chart(chart, f"A{chart_row}")
+
+        # One radar carrying a series per group: the workbook's version of the
+        # split profile shapes in the PDF. A single averaged shape across
+        # several countries or sectors describes a company that does not exist.
+        if split:
+            shape = RadarChart()
+            shape.type = "marker"
+            shape.title = f"Profile shape {title.lower()} (0-100)"
+            shape.add_data(
+                Reference(sheet, min_col=1, max_col=len(present) + 1,
+                          min_row=head + 1, max_row=head + shown),
+                titles_from_data=True, from_rows=True,
+            )
+            _label_chart(
+                shape,
+                Reference(sheet, min_col=2, max_col=len(present) + 1,
+                          min_row=head, max_row=head),
+                show_values=False, value_axis=False,
+            )
+            shape.y_axis.scaling.min, shape.y_axis.scaling.max = 0, 100
+            shape.height, shape.width = 12, 15
+            sheet.add_chart(shape, f"L{chart_row}")
 
     # --- recommendations and themes ---------------------------------------
     advice = workbook.create_sheet("Recommendations")
-    _set_widths(advice, [(1, 9), (2, 12), (3, 32), (4, 40), (5, 70)])
-    _write_header(advice, 1, ["Priority", "Severity", "Factor", "Action", "Detail"])
+    _set_widths(advice, [(1, 9), (2, 18), (3, 32), (4, 40), (5, 70), (6, 60)])
+    _write_header(advice, 1, ["Priority", "Severity", "Factor", "Action",
+                              "Detail", "Supporting words from respondents"])
     for index, rec in enumerate(summary.recommendations, start=1):
         row = index + 1
         advice.cell(row=row, column=1, value=index)
@@ -1355,13 +1649,60 @@ def dataset_excel_bytes(summary: DatasetSummary) -> bytes:
         advice.cell(row=row, column=4, value=rec.title)
         detail = advice.cell(row=row, column=5, value=rec.action)
         detail.alignment = Alignment(wrap_text=True, vertical="top")
+        quotes = advice.cell(row=row, column=6,
+                             value="\n".join(f"“{q}”" for q in rec.evidence))
+        quotes.alignment = Alignment(wrap_text=True, vertical="top")
         advice.row_dimensions[row].height = 42
 
-    if summary.themes:
+    insights = summary.text_insights
+    if summary.themes or (insights is not None and insights.used):
         themes = workbook.create_sheet("Written answers")
-        _set_widths(themes, [(1, 36), (2, 12), (3, 90)])
-        _write_header(themes, 1, ["Theme", "Mentions", "Example"])
-        row = 2
+        _set_widths(themes, [(1, 42), (2, 14), (3, 90)])
+        row = 1
+
+        if insights is not None and insights.used:
+            themes.cell(row=row, column=1,
+                        value="How the written answers were read").font = _TITLE_FONT
+            row += 1
+            for label, value in (
+                ("Respondents with written answers", insights.total_respondents),
+                ("Answers looked at", insights.answers_seen),
+                ("Answers used", insights.answers_used),
+                ("Set aside as non-answers", insights.answers_dropped),
+                ("Respondents who wrote something usable", insights.respondents),
+            ):
+                themes.cell(row=row, column=1, value=label).font = Font(bold=True)
+                themes.cell(row=row, column=2, value=value)
+                row += 1
+            if insights.drop_reasons:
+                themes.cell(row=row, column=1, value="Why answers were set aside") \
+                    .font = Font(bold=True)
+                themes.cell(row=row, column=2, value=", ".join(
+                    f"{reason}: {count}"
+                    for reason, count in sorted(insights.drop_reasons.items(),
+                                                key=lambda kv: -kv[1])))
+                row += 1
+
+            row += 1
+            themes.cell(row=row, column=1,
+                        value="Factors named in the written answers").font = _TITLE_FONT
+            row += 1
+            _write_header(themes, row, ["Factor", "Raised by", "Example"])
+            row += 1
+            for signal in insights.by_factor:
+                themes.cell(row=row, column=1, value=signal.factor_name)
+                themes.cell(row=row, column=2,
+                            value=f"{signal.mentions} ({signal.share:.0f}%)")
+                cell = themes.cell(row=row, column=3,
+                                   value=signal.examples[0] if signal.examples else "")
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
+                row += 1
+            row += 1
+
+        themes.cell(row=row, column=1, value="Recurring subjects").font = _TITLE_FONT
+        row += 1
+        _write_header(themes, row, ["Theme", "Mentions", "Example"])
+        row += 1
         for name, count, examples in summary.themes:
             themes.cell(row=row, column=1, value=name)
             themes.cell(row=row, column=2, value=count)

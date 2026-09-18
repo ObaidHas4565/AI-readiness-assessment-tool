@@ -87,6 +87,74 @@ def esc(text: object) -> str:
     return html.escape(str(text), quote=True)
 
 
+def evidence_html(rec, single: bool = False) -> str:
+    """
+    The respondents' own words, under the recommendation they support.
+
+    Shown so a reader can see whether an action agrees with what people
+    actually wrote. The quotes support the recommendation; they are not part
+    of the score, and never move it.
+    """
+    if not getattr(rec, "evidence", None):
+        return ""
+
+    if single:
+        lead = "In your own words:"
+    else:
+        people = "respondent" if rec.evidence_count == 1 else "respondents"
+        lead = f"Raised in writing by {rec.evidence_count} {people}:"
+
+    quotes = "".join(
+        f"<div style='margin-top:2px'>“{esc(quote)}”</div>"
+        for quote in rec.evidence
+    )
+    return (
+        f"<div style='font-size:.78rem;color:#777;margin-top:8px;"
+        f"padding-top:6px;border-top:1px solid #E6E6E6'>"
+        f"<b>{lead}</b>{quotes}</div>"
+    )
+
+
+def render_written_answers(results) -> None:
+    """
+    The company's own written answers, and what reading them found.
+
+    Shown after the recommendations rather than buried at the end, because on
+    a single assessment these three answers are the only place the respondent
+    could say something the 32 questions never asked.
+    """
+    if not results.notes:
+        return
+
+    st.divider()
+    st.subheader("In your own words")
+
+    insights = results.text_insights
+    if insights is not None and insights.by_factor:
+        named = ", ".join(signal.factor_name for signal in insights.by_factor)
+        st.caption(
+            f"Read as being about: **{named}**. Anything here that the scores "
+            f"did not already flag appears in the actions above, marked as "
+            f"raised in comments. Written answers never change a score."
+        )
+    elif insights is not None and insights.answers_used == 0:
+        st.caption(
+            "Nothing specific enough to analyse — answers like “N/A”, “none” "
+            "or a blank are set aside rather than counted."
+        )
+    else:
+        st.caption("Never scored, and shown here as written.")
+
+    for question, answer in results.notes.items():
+        st.markdown(f"**{esc(question)}**")
+        st.markdown(
+            f"<div style='background:#FAFAFA;border-left:3px solid #E0E0E0;"
+            f"padding:8px 12px;margin-bottom:8px;font-size:.9rem'>"
+            f"{esc(answer)}</div>",
+            unsafe_allow_html=True,
+        )
+
+
 def score_bar(label: str, score: float, band: str, caption: Optional[str] = None) -> None:
     """
     One labelled bar. Plain HTML so it matches the colours in the PDF.
@@ -363,10 +431,11 @@ def render_form() -> None:
     st.divider()
     st.subheader("Anything else")
     st.caption(
-        "Optional, and never scored. The questions above cover seven areas in "
-        "a fixed way; this is where anything they miss can be said plainly. "
-        "It appears in your report, and across a dataset these answers are "
-        "grouped to show what people raise most."
+        "Optional, and never scored — but read. The questions above cover "
+        "seven areas in a fixed way; this is where anything they miss can be "
+        "said plainly. What you write here is matched to the readiness factor "
+        "it concerns, quoted beside the actions it supports, and raised as its "
+        "own point if it names something the scores did not flag."
     )
     st.text_area(
         "What is the single biggest thing holding your company back from AI?",
@@ -552,10 +621,13 @@ def render_results(results) -> None:
                   <span style="opacity:.55;font-size:.78rem"> &nbsp;{esc(source)}</span>
                   <div style="font-weight:600;margin-top:3px">{esc(rec.title)}</div>
                   <div style="font-size:.88rem;margin-top:3px">{esc(rec.action)}</div>
+                  {evidence_html(rec, single=True)}
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
+
+    render_written_answers(results)
 
     st.divider()
     st.subheader("Take it with you")
@@ -614,7 +686,10 @@ def render_import_report(report) -> None:
             for match in sorted(fuzzy, key=lambda m: m.confidence)[:10]:
                 st.write(f"`{match.target}` ← {match.header}  ({match.confidence:.0%})")
         if report.free_text_headers:
-            st.caption("Kept as open-ended answers (never scored):")
+            st.caption(
+                "Kept as open-ended answers — not scored, but read and "
+                "matched to the factors they concern:"
+            )
             for header in report.free_text_headers:
                 st.write(f"• {header}")
         if report.ignored_headers:
@@ -704,9 +779,9 @@ def render_framework_comparison(report) -> None:
 
 def render_batch() -> None:
     st.markdown(
-        "Upload a survey export and every response is scored with the same "
+        "Upload a dataset and every response is scored with the same "
         "engine. The column names don't have to match the tool's — it works "
-        "out which column is which from the question wording, and reads word "
+        "out which column is which from the question wording, and reads text "
         "answers like \"Agree\" as well as numbers."
     )
 
@@ -868,6 +943,7 @@ def render_dataset(summary) -> None:
                     &nbsp;{esc(rec.factor_name)}</span>
                   <div style="font-weight:600;margin-top:3px">{esc(rec.title)}</div>
                   <div style="font-size:.88rem;margin-top:3px">{esc(rec.action)}</div>
+                  {evidence_html(rec)}
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -879,12 +955,43 @@ def render_dataset(summary) -> None:
                 st.write(f"**{count}×** {title}")
 
     # --- what people wrote ------------------------------------------------
+    insights = summary.text_insights
+    if insights is not None and insights.used:
+        st.subheader("Which factors the written answers name")
+        st.caption(
+            f"{insights.answers_used} of {insights.answers_seen} written "
+            f"answers said something specific. The other "
+            f"{insights.answers_dropped} were blanks or non-answers (“N/A”, "
+            f"“none”, “no”) and were set aside rather than counted. Each "
+            f"remaining answer is placed against the factor it talks about, "
+            f"so the comments can be read against the scores. Shares are of "
+            f"all {insights.total_respondents} respondents, not only those "
+            f"whose answers could be read. No score changes as a result."
+        )
+
+        means = dict(summary.factor_means)
+        for signal in insights.by_factor:
+            score = means.get(signal.factor_id)
+            scored = f"score {score:.0f}/100" if score is not None else "not scored"
+            flagged = any(rec.factor_id == signal.factor_id
+                          and rec.severity != "raised"
+                          for rec in summary.recommendations)
+            mismatch = "" if flagged else " · not flagged by the scores"
+            score_bar(
+                signal.factor_name, signal.share,
+                cfg.band_for_score(100 - signal.share).label,
+                caption=f"% raised it · {scored}{mismatch}",
+            )
+            for example in signal.examples[:1]:
+                st.markdown(
+                    f"<div style='font-size:.8rem;color:#777;margin:-4px 0 10px 2px'>"
+                    f"“{esc(example)}”</div>", unsafe_allow_html=True)
+
     if summary.themes:
         st.subheader("What respondents raised themselves")
         st.caption(
-            f"Grouped from the written answers in {len(summary.notes)} "
-            f"responses. Never scored — and regularly the part that explains "
-            f"why a score is what it is."
+            f"Grouped by subject rather than by word, so “cost”, “budget” and "
+            f"“can't afford it” count as one concern rather than three."
         )
         for name, count, examples in summary.themes:
             share = count / max(1, len(summary.notes)) * 100
@@ -980,7 +1087,7 @@ with st.sidebar:
         "are gone when you close the tab. Downloaded files are the only copy."
     )
 
-assessment_tab, batch_tab = st.tabs(["Assessment", "Score a dataset"])
+assessment_tab, batch_tab = st.tabs(["Assessment", "Dataset"])
 
 with assessment_tab:
     results = st.session_state.get("results")
