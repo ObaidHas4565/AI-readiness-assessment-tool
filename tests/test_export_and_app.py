@@ -562,9 +562,47 @@ def test_the_dataset_workbook_splits_the_shape_by_group():
 # ---------------------------------------------------------------------------
 
 def _pdf_text(data: bytes) -> str:
-    pypdf = pytest.importorskip("pypdf")
-    reader = pypdf.PdfReader(io.BytesIO(data))
-    return "\n".join(page.extract_text() or "" for page in reader.pages)
+    """
+    The text inside a generated PDF, using the standard library only.
+
+    A PDF reader would be one line, but it would be a dependency the tool
+    itself never needs, and on a machine without it these checks would quietly
+    skip rather than run. reportlab writes its pages as ASCII85 over Flate,
+    and both decoders ship with Python, so the pages are unwrapped here
+    instead.
+    """
+    import base64
+    import re
+    import zlib
+
+    pages = []
+    for match in re.finditer(rb"stream\r?\n(.*?)endstream", data, re.S):
+        raw = match.group(1).strip()
+        if raw.endswith(b"~>"):          # the ASCII85 end-of-data marker
+            raw = raw[:-2]
+        try:
+            raw = base64.a85decode(raw, adobe=False, ignorechars=b" \t\r\n")
+        except ValueError:               # not ASCII85 -- try it as raw Flate
+            pass
+        try:
+            pages.append(zlib.decompress(raw))
+        except zlib.error:               # an image or font, not page text
+            pass
+
+    return b"".join(pages).decode("latin-1")
+
+
+def test_the_pdf_text_can_be_read_back_at_all():
+    """
+    The two ordering tests below are only meaningful if the text really was
+    extracted. Without this, a change to how reportlab compresses its pages
+    would leave them searching an empty string and passing on nothing.
+    """
+    results = results_for(lambda item: 3)
+    text = _pdf_text(to_pdf_bytes(results))
+
+    assert len(text) > 1000, "no page text came out of the PDF"
+    assert "AI Adoption Readiness" in text
 
 
 def test_the_scoring_explanation_comes_before_the_scores(mixed_results):
