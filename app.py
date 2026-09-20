@@ -785,7 +785,7 @@ def render_batch() -> None:
         "answers like \"Agree\" as well as numbers."
     )
 
-    upload = st.file_uploader("Survey file", type=["csv", "xlsx", "xlsm"])
+    upload = st.file_uploader("Datasets", type=["csv", "xlsx", "xlsm"])
     if upload is None:
         st.caption(
             "CSV or Excel. A Google Forms export of this questionnaire works "
