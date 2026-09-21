@@ -274,7 +274,7 @@ def item_strip(results) -> None:
             f'vertical-align:middle">{esc(factor.name)}</span>{blocks}</div>',
             unsafe_allow_html=True,
         )
-    st.caption("One block per question, darkest = weakest. Hover to read it.")
+    st.caption("One block per question, Green - Strong, Yellow - Neutral, Red - Weak. Hover to read it.")
 
 
 def histogram(values: Sequence[float], bins: int = 10) -> None:
