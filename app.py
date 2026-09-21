@@ -788,8 +788,7 @@ def render_batch() -> None:
     upload = st.file_uploader("Datasets", type=["csv", "xlsx", "xlsm"])
     if upload is None:
         st.caption(
-            "CSV or Excel. A Google Forms export of this questionnaire works "
-            "as downloaded, and so does anything this tool wrote itself."
+            "CSV or Excel"
         )
         return
 
