@@ -624,7 +624,7 @@ def render_results(results) -> None:
     render_written_answers(results)
 
     st.divider()
-    st.subheader("Take it with you")
+    st.subheader("Download Your Results")
 
     pdf_column, excel_column = st.columns(2)
     with pdf_column:
@@ -1002,7 +1002,7 @@ def render_dataset(summary) -> None:
 
     # --- downloads --------------------------------------------------------
     st.divider()
-    st.subheader("Take it with you")
+    st.subheader("Download Your Results")
     pdf_column, excel_column = st.columns(2)
     with pdf_column:
         st.download_button(
