@@ -431,11 +431,7 @@ def render_form() -> None:
     st.divider()
     st.subheader("Anything else")
     st.caption(
-        "Optional, and never scored — but read. The questions above cover "
-        "seven areas in a fixed way; this is where anything they miss can be "
-        "said plainly. What you write here is matched to the readiness factor "
-        "it concerns, quoted beside the actions it supports, and raised as its "
-        "own point if it names something the scores did not flag."
+        "Optional - your answers won't affect your score. Use this space to share anything the questions above may not have covered. Your comments will be considered alongside your results and may be included in your recommendations if they highlight an important concern."
     )
     st.text_area(
         "What is the single biggest thing holding your company back from AI?",
@@ -1061,15 +1057,13 @@ def _radar_grid(groups) -> None:
 
 st.title("AI Adoption Readiness Assessment")
 st.caption(
-    "A readiness check for small and medium businesses considering AI. "
-    "Scores seven areas, shows where the gaps are, and suggests what to do next."
+    "This is a readiness check for companies considering AI, and it scores 7 areas of your company, points out where the gaps are, and suggests what to do next."
 )
 
 with st.sidebar:
     st.header("About")
     st.write(
-        "This tool scores AI adoption readiness across seven factors using a "
-        "questionnaire developed for an MSc dissertation project."
+        "This tool scores AI adoption readiness across seven factors using a questionnaire."
     )
     st.write(f"**{len(cfg.FACTORS)} factors · {len(cfg.ALL_ITEMS)} questions**")
     st.divider()
@@ -1082,8 +1076,7 @@ with st.sidebar:
         )
     st.divider()
     st.caption(
-        "Nothing you enter is stored. Answers stay in your browser session and "
-        "are gone when you close the tab. Downloaded files are the only copy."
+        "Nothing you entered is stored. Your answers stay in your browser session and are removed when you close the tab. If you download a report, that downloaded file is the only copy of your results."
     )
 
 assessment_tab, batch_tab = st.tabs(["Assessment", "Dataset"])
