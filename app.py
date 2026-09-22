@@ -1035,7 +1035,7 @@ def _radar_grid(groups) -> None:
 
 st.title("AI Adoption Readiness Assessment")
 st.caption(
-    "This is a readiness check for companies considering AI, and it scores 7 areas of your company, points out where the gaps are, and suggests what to do next."
+    "This is a readiness check for companies considering AI. It scores 7 areas of your company, points out where the gaps are, and suggests what to do next."
 )
 
 with st.sidebar:
