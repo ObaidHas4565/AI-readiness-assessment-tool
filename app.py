@@ -362,9 +362,7 @@ def context_value(field: str) -> Optional[str]:
 
 def render_form() -> None:
     st.markdown(
-        "Answer every question about your company as it is today, not as you "
-        "would like it to be. It takes about five minutes. Nothing you enter "
-        "is saved anywhere."
+        "Please answer every question based on how your company is today, rather than how you would like it to be. The assessment takes about 5 minutes, and nothing you enter is saved."
     )
 
     answered = sum(
@@ -775,10 +773,7 @@ def render_framework_comparison(report) -> None:
 
 def render_batch() -> None:
     st.markdown(
-        "Upload a dataset and every response is scored with the same "
-        "engine. The column names don't have to match the tool's — it works "
-        "out which column is which from the question wording, and reads text "
-        "answers like \"Agree\" as well as numbers."
+        "Upload your dataset and the assessment will score each response using the same scoring method. You don't need to rename your columns to match the tool. It can identify the relevant questions from their wording and understand answers such as 'Agree' as well as numerical responses."
     )
 
     upload = st.file_uploader("Datasets", type=["csv", "xlsx", "xlsm"])
