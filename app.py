@@ -1003,7 +1003,7 @@ def render_dataset(summary) -> None:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
         )
-    st.caption("Both carry the same charts and figures shown here.")
+    
 
 
 def _radar_grid(groups) -> None:
