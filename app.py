@@ -696,30 +696,25 @@ def render_import_report(report) -> None:
 
 def render_framework_comparison(report) -> None:
     """
-    What to show when the file is a survey, but not this one.
+    What to show when the file is a dataset, but not this one.
 
     Scoring it is refused, and the reason is worth being straight about: the
-    seven factors are measured by 32 specific statements, and a survey asking
+    seven factors are measured by 32 specific statements, and a dataset asking
     different questions measures different things. A number produced from it
     would look like a readiness score without being one.
 
     Refusing and stopping there would waste the file, though. The question
     that can be answered is how the two instruments relate — which factors
-    that survey covers, which it leaves out, and what it asks about that this
+    that dataset covers, which it leaves out, and what it asks about that this
     framework doesn't reach. That is a comparison worth having.
     """
     analysis = report.compare_to_framework()
 
     st.warning(
-        f"**This is a different questionnaire.** None of its questions match "
-        f"this instrument's wording, so it can't be scored here — the seven "
-        f"factors are defined by 32 specific statements, and a score built "
-        f"from other questions would not be measuring the same thing."
+        "This dataset is different from the one used in this assessment. The questions don't match closely enough for the tool to score directly. The assessment uses 32 specific statements to measure 7 readiness factors, so using different questions could produce results that aren't directly comparable."
     )
     st.markdown(
-        "What can be done is compare the two. Below is where that survey's "
-        "questions fall against the seven factors, matched on meaning rather "
-        "than wording."
+        "You can compare the 2. Below you can see how the questions in this dataset relate to the 7 readiness factors. The questions are matched based on their meaning rather than their exact wording."
     )
 
     covered = analysis["covered"]
@@ -740,16 +735,15 @@ def render_framework_comparison(report) -> None:
             )
 
     if not_covered:
-        st.subheader("Not covered at all")
+        st.subheader("Not covered by this dataset")
         for factor_id in not_covered:
             st.markdown(f"• **{cfg.FACTORS_BY_ID[factor_id].name}**")
         st.caption(
-            "That survey asks nothing that corresponds to these factors, so it "
-            "could not produce a reading on them even in principle."
+            "The dataset doesn't include the questions that correspond to these factors, so the tool can't score those factors from this dataset."
         )
 
     if analysis["unrelated"]:
-        st.subheader("Asks about things this framework doesn't measure")
+        st.subheader("Includes questions not covered by this assessment")
         for header, score in analysis["unrelated"]:
             st.markdown(
                 f"<div style='font-size:.84rem;margin:2px 0 6px 0'>"
@@ -757,17 +751,12 @@ def render_framework_comparison(report) -> None:
                 unsafe_allow_html=True,
             )
         st.caption(
-            "These score near zero because they measure outcomes — whether AI "
-            "has already helped — rather than readiness to adopt it. Different "
-            "question, not a worse one."
+            "These scores are low because the questions focus on the results of using AI, such as whether AI has already helped the company, rather than its readiness to adopt AI. They measure something different from the assessment, not something better or worse."
         )
 
     st.divider()
     st.caption(
-        "Matching here uses stemming, a domain concept lexicon and "
-        "IDF-weighted cosine similarity over the question text. It is reliable "
-        "at factor level and much less so at the level of individual "
-        "questions, which is why it is used for comparison and not for scoring."
+        "The questions are matched by their meaning rather than their exact wording. This works best when looking at the 7 readiness factors as a whole, but individual question matches may be less precise. That's why the matching is used for comparison and not for scoring."
     )
 
 
@@ -805,16 +794,10 @@ def render_batch() -> None:
         covered = ", ".join(
             cfg.FACTORS_BY_ID[f].name for f in analysis["covered"])
         st.markdown(
-            f"This dataset has questions matching **{covered}**. Those can be "
-            f"scored on their own, with the overall figure re-weighted across "
-            f"only the factors present — a missing factor is left out rather "
-            f"than counted as zero."
+            f"This dataset has questions matching **{covered}**. Those can be scored on their own, and the overall score will be based only on the readiness factors covered by the dataset. Any factors that are not included will be left out rather than treated as zero."
         )
         st.caption(
-            "Treat what comes back as indicative. The questions were written "
-            "for a different survey and paired to this one by meaning, which "
-            "is reliable at factor level and much less so question by "
-            "question."
+            "Please treat the results as an indication rather than an exact measurement. The questions come from a different dataset and have been matched to this assessment based on their meaning. The matches are more reliable when looking at the readiness factors as a whole than when looking at individual questions."
         )
         if not st.checkbox("Score the covered factors", key="score_partial"):
             return
