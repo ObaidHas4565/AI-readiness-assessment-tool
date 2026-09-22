@@ -711,7 +711,7 @@ def render_framework_comparison(report) -> None:
     analysis = report.compare_to_framework()
 
     st.warning(
-        "This dataset is different from the one used in this assessment. The questions don't match closely enough for the tool to score directly. The assessment uses 32 specific statements to measure 7 readiness factors, so using different questions could produce results that aren't directly comparable."
+        "This dataset is different from the questionnaire used in this assessment. The questions don't match closely enough for the tool to score directly. The assessment uses 32 specific statements to measure 7 readiness factors, so using different questions could produce results that aren't directly comparable."
     )
     st.markdown(
         "You can compare the 2. Below you can see how the questions in this dataset relate to the 7 readiness factors. The questions are matched based on their meaning rather than their exact wording."
