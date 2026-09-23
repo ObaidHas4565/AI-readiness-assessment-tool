@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 
 @dataclass(frozen=True)
 class ItemScore:
-    """Score for a single Likert item (subfactor)."""
+    """Score for a single rating item (subfactor)."""
 
     item_id: str
     text: str
@@ -44,7 +44,7 @@ class FactorScore:
     factor_id: str
     name: str
     weight: float
-    mean_likert: float          # 1-5
+    mean_rating: float          # 1-5
     score: float                # 0-100
     band_label: str
     weighted_contribution: float  # score * weight, contribution to the overall
@@ -170,7 +170,7 @@ class AssessmentResults:
                     "factor_id": f.factor_id,
                     "name": f.name,
                     "weight": round(f.weight, 4),
-                    "mean_likert": round(f.mean_likert, 3),
+                    "mean_rating": round(f.mean_rating, 3),
                     "score": round(f.score, 2),
                     "band": f.band_label,
                     "answered": f.answered,
