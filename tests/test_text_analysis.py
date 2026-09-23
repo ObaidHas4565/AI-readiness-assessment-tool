@@ -116,7 +116,7 @@ def _profile(**extra) -> CompanyProfile:
 
 def test_written_answers_never_move_the_score():
     """
-    The score is a weighted average of Likert responses and nothing else.
+    The score is a weighted average of rating responses and nothing else.
     Moving it on a keyword match would make it impossible to reproduce.
     """
     plain = ScoringEngine().score(_profile())
