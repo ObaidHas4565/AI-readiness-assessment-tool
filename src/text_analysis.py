@@ -19,7 +19,7 @@ This module reads them. It does two jobs:
 What this deliberately does NOT do
 ----------------------------------
 It does not change any score. The readiness score is defined as a weighted
-average of Likert responses, and quietly moving it on the strength of a
+average of rating responses, and quietly moving it on the strength of a
 keyword match would make the number impossible to defend and impossible to
 reproduce. What the text does instead is affect the *interpretation*:
 
