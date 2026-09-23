@@ -728,7 +728,7 @@ def to_excel_bytes(results: AssessmentResults) -> bytes:
     for index, factor in enumerate(results.ordered_factors(), start=2):
         factors.cell(row=index, column=1, value=factor.name)
         factors.cell(row=index, column=2, value=round(factor.score, 1))
-        factors.cell(row=index, column=3, value=round(factor.mean_likert, 2))
+        factors.cell(row=index, column=3, value=round(factor.mean_rating, 2))
         factors.cell(row=index, column=4, value=round(factor.weight, 4))
         factors.cell(row=index, column=5, value=round(factor.weighted_contribution, 2))
         band = factors.cell(row=index, column=6, value=factor.band_label)
@@ -801,7 +801,7 @@ def to_excel_bytes(results: AssessmentResults) -> bytes:
             question.alignment = Alignment(wrap_text=True, vertical="top")
             responses.cell(row=row, column=4, value=item.raw_value)
             responses.cell(row=row, column=5,
-                           value=cfg.LIKERT_LABELS.get(item.raw_value, ""))
+                           value=cfg.RATING_LABELS.get(item.raw_value, ""))
             responses.cell(row=row, column=6, value="Yes" if item.reverse else "No")
             responses.cell(row=row, column=7, value=round(item.score, 1))
             for column in range(1, 8):
@@ -1129,7 +1129,7 @@ def cohort_results(scored) -> AssessmentResults:
 
         factor_scores[factor.id] = FactorScore(
             factor_id=factor.id, name=factor.name, weight=factor.weight,
-            mean_likert=mean_score / 25 + 1, score=mean_score,
+            mean_rating=mean_score / 25 + 1, score=mean_score,
             band_label=cfg.band_for_score(mean_score).label,
             weighted_contribution=mean_score * factor.weight,
             item_scores=items, answered=len(items), expected=len(factor.items),
