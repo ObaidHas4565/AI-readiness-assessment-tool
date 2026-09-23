@@ -27,7 +27,7 @@ How the matching works:
 
   Context columns are matched against a list of the ways people label them.
 
-  Answers go through parse_likert, so words, numbers, or "4 - Agree" all
+  Answers go through parse_rating, so words, numbers, or "4 - Agree" all
   read the same.
 
 Anything that doesn't match is reported rather than silently dropped, so it
@@ -728,7 +728,7 @@ def import_survey(data: bytes, filename: str = "",
         for match in usable:
             value = raw.get(match.header)
             if match.kind == "item":
-                parsed = cfg.parse_likert(value)
+                parsed = cfg.parse_rating(value)
                 if parsed is not None:
                     row[match.target] = parsed
             else:
