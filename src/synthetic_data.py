@@ -162,7 +162,7 @@ FACTOR_DRIFT_SD: float = 0.45
 # Generation
 # ---------------------------------------------------------------------------
 
-def _clamp(value: int, low: int = cfg.LIKERT_MIN, high: int = cfg.LIKERT_MAX) -> int:
+def _clamp(value: int, low: int = cfg.RATING_MIN, high: int = cfg.RATING_MAX) -> int:
     return max(low, min(high, value))
 
 
@@ -226,7 +226,7 @@ def generate_company(
     """
     Generate one synthetic company as a flat dict in the tool's schema.
 
-    Returned values for Likert items are RAW answers -- reverse-worded items are
+    Returned values for rating items are RAW answers -- reverse-worded items are
     inverted here, exactly as a real respondent would have answered them, so
     the row exercises the same reverse-coding path as genuine survey data.
     """
@@ -300,7 +300,7 @@ def load_profiles_from_lines(lines: Iterable[str]) -> List[Tuple[str, CompanyPro
     what the dashboard needs, since nothing about a submission is meant to be
     stored anywhere.
 
-    CSV values arrive as strings, so Likert columns are cast to int here.
+    CSV values arrive as strings, so rating columns are cast to int here.
     Anything non-numeric is left alone on purpose, so CompanyProfile validation
     reports it properly instead of this loader crashing on it.
     """
@@ -389,8 +389,8 @@ def write_data_dictionary(path: str) -> None:
         "| Value | Label |",
         "|---|---|",
     ]
-    for value in sorted(cfg.LIKERT_LABELS, reverse=True):
-        lines.append(f"| {value} | {cfg.LIKERT_LABELS[value]} |")
+    for value in sorted(cfg.RATING_LABELS, reverse=True):
+        lines.append(f"| {value} | {cfg.RATING_LABELS[value]} |")
 
     lines += [
         "",
@@ -473,8 +473,8 @@ def write_readable_csv(rows: Iterable[Dict[str, object]], path: str) -> int:
             for item in cfg.ALL_ITEMS:
                 value = row.get(item.id)
                 record.append(
-                    f"{value} - {cfg.LIKERT_LABELS[value]}"
-                    if isinstance(value, int) and value in cfg.LIKERT_LABELS
+                    f"{value} - {cfg.RATING_LABELS[value]}"
+                    if isinstance(value, int) and value in cfg.RATING_LABELS
                     else value
                 )
             writer.writerow(record)
