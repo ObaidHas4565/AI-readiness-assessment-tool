@@ -3,7 +3,7 @@ CompanyProfile
 ==============
 
 Represents the data a single company submits to the assessment tool: five
-categorical context fields plus the 32 Likert responses.
+categorical context fields plus the 32 rating responses.
 
 Per the Class Diagram, CompanyProfile is the input object that is passed to the
 ScoringEngine. Per the Session Diagram, validation happens before the data
@@ -24,8 +24,8 @@ from .score_configuration import (
     ALL_ITEMS,
     CATEGORICAL_FIELDS,
     ITEMS_BY_ID,
-    LIKERT_MAX,
-    LIKERT_MIN,
+    RATING_MAX,
+    RATING_MIN,
     NEEDS_SPECIFIC_VALUE,
     OPEN_FIELDS,
 )
@@ -43,7 +43,7 @@ class CompanyProfile:
     Attributes
     ----------
     responses:
-        Mapping of item id -> raw Likert value (1-5), as answered. Raw means
+        Mapping of item id -> raw rating value (1-5), as answered. Raw means
         NOT reverse-coded; re-coding is the ScoringEngine's job so that the
         original response is always recoverable.
     industry_sector, employee_band, years_in_operation, region, current_ai_stage:
@@ -163,7 +163,7 @@ class CompanyProfile:
                     f"(got {value!r})."
                 )
 
-        # --- Likert responses ---
+        # --- rating responses ---
         missing = [item.id for item in ALL_ITEMS if item.id not in self.responses]
         if missing:
             errors.append(
@@ -178,12 +178,12 @@ class CompanyProfile:
             if isinstance(value, bool) or not isinstance(value, int):
                 errors.append(
                     f"Answer to {item_id} must be a whole number "
-                    f"{LIKERT_MIN}-{LIKERT_MAX} (got {value!r})."
+                    f"{RATING_MIN}-{RATING_MAX} (got {value!r})."
                 )
-            elif not (LIKERT_MIN <= value <= LIKERT_MAX):
+            elif not (RATING_MIN <= value <= RATING_MAX):
                 errors.append(
                     f"Answer to {item_id} is out of range: {value} "
-                    f"(allowed {LIKERT_MIN}-{LIKERT_MAX})."
+                    f"(allowed {RATING_MIN}-{RATING_MAX})."
                 )
 
         return errors
