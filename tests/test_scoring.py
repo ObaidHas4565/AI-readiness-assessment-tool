@@ -46,7 +46,7 @@ def test_configuration_is_internally_consistent():
 
 
 def test_survey_shape_matches_instrument():
-    """7 factors and 32 Likert items, as per the survey document."""
+    """7 factors and 32 rating items, as per the survey document."""
     assert len(cfg.FACTORS) == 7
     assert len(cfg.ALL_ITEMS) == 32
 
