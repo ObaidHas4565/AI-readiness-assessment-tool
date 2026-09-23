@@ -330,7 +330,7 @@ def grouped_bars(title: str, groups: Dict[str, List[float]], minimum: int = 1) -
 
 
 def answer_label(value: int) -> str:
-    return f"{value} — {cfg.LIKERT_LABELS[value]}"
+    return f"{value} — {cfg.RATING_LABELS[value]}"
 
 
 def reset_assessment() -> None:
