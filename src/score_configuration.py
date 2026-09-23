@@ -10,7 +10,7 @@ thresholds and the item wording can be revised as the research develops without
 touching the ScoringEngine, the RecommendationEngine or the Streamlit layer.
 
 Everything here is derived directly from the AI Adoption Readiness Survey
-instrument (7 readiness factors, 32 Likert items, 5 categorical profile fields).
+instrument (7 readiness factors, 32 rating items, 5 categorical profile fields).
 
 Reference: Requirements Specification (FR3, NFR-Maintainability) and the
 Class Diagram in Chapter 4, where ScoreConfiguration is a separate component
@@ -23,16 +23,16 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
-# 1. Likert scale
+# 1. Rating scale
 # ---------------------------------------------------------------------------
 # The survey uses a single uniform 5-point agreement scale for every readiness
 # item. Strongly Agree is stored as 5 so that, for positively-worded items, a
 # higher stored value always means higher readiness.
 
-LIKERT_MIN: int = 1
-LIKERT_MAX: int = 5
+RATING_MIN: int = 1
+RATING_MAX: int = 5
 
-LIKERT_LABELS: Dict[int, str] = {
+RATING_LABELS: Dict[int, str] = {
     5: "Strongly Agree",
     4: "Agree",
     3: "Neutral",
@@ -40,9 +40,9 @@ LIKERT_LABELS: Dict[int, str] = {
     1: "Strongly Disagree",
 }
 
-# Reverse-worded items are re-coded as (LIKERT_MIN + LIKERT_MAX) - raw = 6 - raw
+# Reverse-worded items are re-coded as (RATING_MIN + RATING_MAX) - raw = 6 - raw
 # so that, after re-coding, 5 always means "more ready" for every item.
-REVERSE_PIVOT: int = LIKERT_MIN + LIKERT_MAX  # 6
+REVERSE_PIVOT: int = RATING_MIN + RATING_MAX  # 6
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ REVERSE_PIVOT: int = LIKERT_MIN + LIKERT_MAX  # 6
 
 @dataclass(frozen=True)
 class Item:
-    """A single Likert statement (a 'subfactor' in the requirements)."""
+    """A single Rating statement (a 'subfactor' in the requirements)."""
 
     id: str
     text: str
@@ -60,7 +60,7 @@ class Item:
 
 @dataclass(frozen=True)
 class Factor:
-    """A readiness factor: a named group of Likert items carrying a weight."""
+    """A readiness factor: a named group of Rating items carrying a weight."""
 
     id: str
     name: str
@@ -376,7 +376,7 @@ def normalise_category(field_name: str, value: object) -> Optional[str]:
 # Word answers, so an export that never converted the scale to numbers still
 # loads. The wording identifies the value on its own -- "Agree" is a 4 whether
 # or not a 4 was ever written next to it.
-LIKERT_FROM_TEXT: Dict[str, int] = {
+RATING_FROM_TEXT: Dict[str, int] = {
     "strongly disagree": 1, "strongly  disagree": 1, "str disagree": 1,
     "strongly disagre": 1, "very dissatisfied": 1,
     "disagree": 2, "somewhat disagree": 2, "slightly disagree": 2,
@@ -388,7 +388,7 @@ LIKERT_FROM_TEXT: Dict[str, int] = {
 }
 
 
-def parse_likert(value: object) -> Optional[int]:
+def parse_rating(value: object) -> Optional[int]:
     """
     Turn whatever is in a response cell into a 1-5 value, or None.
 
@@ -401,10 +401,10 @@ def parse_likert(value: object) -> Optional[int]:
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
-        return value if LIKERT_MIN <= value <= LIKERT_MAX else None
+        return value if RATING_MIN <= value <= RATING_MAX else None
     if isinstance(value, float):
         rounded = int(round(value))
-        return rounded if LIKERT_MIN <= rounded <= LIKERT_MAX else None
+        return rounded if RATING_MIN <= rounded <= RATING_MAX else None
 
     text = str(value).strip()
     if not text:
@@ -414,16 +414,16 @@ def parse_likert(value: object) -> Optional[int]:
     head = text.replace("—", "-").split("-")[0].strip()
     if head.isdigit():
         number = int(head)
-        if LIKERT_MIN <= number <= LIKERT_MAX:
+        if RATING_MIN <= number <= RATING_MAX:
             return number
 
     cleaned = " ".join(text.lower().replace("_", " ").split())
-    if cleaned in LIKERT_FROM_TEXT:
-        return LIKERT_FROM_TEXT[cleaned]
+    if cleaned in RATING_FROM_TEXT:
+        return RATING_FROM_TEXT[cleaned]
 
     # Last resort: a cell like "Agree (4)" or "Response: strongly agree"
     for phrase, number in sorted(
-        LIKERT_FROM_TEXT.items(), key=lambda kv: -len(kv[0])
+        RATING_FROM_TEXT.items(), key=lambda kv: -len(kv[0])
     ):
         if phrase in cleaned:
             return number
@@ -434,7 +434,7 @@ def parse_likert(value: object) -> Optional[int]:
 # 4. Score bands and selection thresholds
 # ---------------------------------------------------------------------------
 # All factor and overall scores are normalised to 0-100 so that they are
-# directly comparable and easy to present. On the 1-5 Likert scale:
+# directly comparable and easy to present. On the 1-5 rating scale:
 #
 #       all "Strongly Disagree" (1) ->   0
 #       all "Disagree"          (2) ->  25
@@ -513,9 +513,9 @@ MAX_ITEM_BARRIERS_PER_FACTOR: int = 2
 # 5. Helper functions
 # ---------------------------------------------------------------------------
 
-def normalise_likert(mean_value: float) -> float:
-    """Convert a mean Likert value (1-5) to a 0-100 score."""
-    return (mean_value - LIKERT_MIN) / (LIKERT_MAX - LIKERT_MIN) * 100.0
+def normalise_rating(mean_value: float) -> float:
+    """Convert a mean rating value (1-5) to a 0-100 score."""
+    return (mean_value - RATING_MIN) / (RATING_MAX - RATING_MIN) * 100.0
 
 
 def apply_reverse(raw_value: int, reverse: bool) -> int:
