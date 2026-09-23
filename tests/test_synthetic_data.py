@@ -50,7 +50,7 @@ def test_generated_rows_are_valid_profiles():
 def test_all_answers_are_in_range():
     for row in generate_dataset(n=50, seed=2):
         for item in cfg.ALL_ITEMS:
-            assert cfg.LIKERT_MIN <= row[item.id] <= cfg.LIKERT_MAX
+            assert cfg.RATING_MIN <= row[item.id] <= cfg.RATING_MAX
 
 
 def test_generation_is_reproducible():
