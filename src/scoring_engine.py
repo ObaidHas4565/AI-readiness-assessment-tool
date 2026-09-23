@@ -69,15 +69,15 @@ class ScoringEngine:
             if not item_scores:
                 continue
 
-            mean_likert = sum(i.adjusted_value for i in item_scores) / len(item_scores)
-            score_0_100 = self.cfg.normalise_likert(mean_likert)
+            mean_rating = sum(i.adjusted_value for i in item_scores) / len(item_scores)
+            score_0_100 = self.cfg.normalise_rating(mean_rating)
             band = self.cfg.band_for_score(score_0_100)
 
             factor_scores[factor.id] = FactorScore(
                 factor_id=factor.id,
                 name=factor.name,
                 weight=factor.weight,
-                mean_likert=mean_likert,
+                mean_rating=mean_rating,
                 score=score_0_100,
                 band_label=band.label,
                 weighted_contribution=score_0_100 * factor.weight,
@@ -130,7 +130,7 @@ class ScoringEngine:
                 if allow_partial:
                     continue
                 raise ValidationError(f"{item.id} is not a number: {value!r}")
-            if not (self.cfg.LIKERT_MIN <= raw <= self.cfg.LIKERT_MAX):
+            if not (self.cfg.RATING_MIN <= raw <= self.cfg.RATING_MAX):
                 if allow_partial:
                     continue
                 raise ValidationError(f"{item.id} is out of range: {raw}")
@@ -144,7 +144,7 @@ class ScoringEngine:
                     raw_value=raw,
                     adjusted_value=adjusted,
                     reverse=item.reverse,
-                    score=self.cfg.normalise_likert(adjusted),
+                    score=self.cfg.normalise_rating(adjusted),
                 )
             )
         return scores
