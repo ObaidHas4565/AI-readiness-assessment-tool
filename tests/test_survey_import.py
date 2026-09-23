@@ -138,7 +138,7 @@ def test_a_question_mentioning_employees_is_not_read_as_the_headcount_column():
     ],
 )
 def test_answers_read_the_same_whether_written_as_words_or_numbers(written, expected):
-    assert cfg.parse_likert(written) == expected
+    assert cfg.parse_rating(written) == expected
 
 
 def test_word_answers_score_identically_to_numbers():
