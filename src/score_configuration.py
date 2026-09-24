@@ -173,7 +173,7 @@ FACTORS: Tuple[Factor, ...] = (
         ),
         items=(
             Item("TEC_1", "Current IT infrastructure could support new AI tools."),
-            Item("TEC_2", "Integrated systems that could connect with AI systems."),
+            Item("TEC_2", "We have integrated systems that could connect with AI systems."),
             Item("TEC_3", "We have IT support capable for maintaining AI tools."),
             Item("TEC_4", "We have previously adopted new digital tools or systems successfully."),
             Item("TEC_5", "Outdated or incompatible technology is the current barrier to AI adoption.", reverse=True),
