@@ -1327,7 +1327,7 @@ def dataset_pdf_bytes(summary: DatasetSummary) -> bytes:
             return
         story.append(Paragraph(heading, s["h2"]))
         cells, labels = [], []
-        for group in groups[:6]:
+        for group in groups:
             scores = [(SHORT_FACTOR_LABELS.get(fid, fid), value)
                       for fid, value in group.factor_means]
             colour = BAND_COLOURS.get(cfg.band_for_score(group.overall).label, "555555")
@@ -1348,7 +1348,7 @@ def dataset_pdf_bytes(summary: DatasetSummary) -> bytes:
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("BOTTOMPADDING", (0, 1), (-1, 1), 10),
             ]))
-            story.append(grid)
+            story.append(KeepTogether(grid))
 
     if summary.split_profiles:
         shapes_for(summary.by_country, "Profile shape by country")
@@ -1580,7 +1580,7 @@ def dataset_excel_bytes(summary: DatasetSummary) -> bytes:
         # chart can read. Short labels, because full factor names overlap each
         # other round a radar.
         present = [factor_id for factor_id, _ in summary.factor_means]
-        shown = min(len(groups), 6)
+        shown = len(groups)
         split = bool(present) and len(groups) > 1
 
         chart_row = end + 3
@@ -1591,7 +1591,7 @@ def dataset_excel_bytes(summary: DatasetSummary) -> bytes:
             head = end + 3
             _write_header(sheet, head, ["Group"] + [
                 SHORT_FACTOR_LABELS.get(f, f) for f in present])
-            for offset, group in enumerate(groups[:6], start=1):
+            for offset, group in enumerate(groups, start=1):
                 means = dict(group.factor_means)
                 sheet.cell(row=head + offset, column=1, value=group.label)
                 for column, factor_id in enumerate(present, start=2):
