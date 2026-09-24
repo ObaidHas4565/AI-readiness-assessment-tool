@@ -1008,7 +1008,7 @@ def render_dataset(summary) -> None:
 
 def _radar_grid(groups) -> None:
     """Small multiples: one profile shape per country or sector."""
-    for start in range(0, min(len(groups), 6), 3):
+    for start in range(0, (len(groups)), 3):
         columns = st.columns(3)
         for column, group in zip(columns, groups[start:start + 3]):
             with column:
@@ -1025,8 +1025,6 @@ def _radar_grid(groups) -> None:
                     f"n={group.count}</span></div>",
                     unsafe_allow_html=True,
                 )
-    if len(groups) > 6:
-        st.caption(f"Showing the six largest of {len(groups)} groups.")
 
 
 # ---------------------------------------------------------------------------
