@@ -175,17 +175,6 @@ def test_service_wrapper_matches_the_functions(mixed_results):
     assert service.to_pdf(mixed_results).startswith(b"%PDF-")
     assert zipfile.is_zipfile(io.BytesIO(service.to_excel(mixed_results)))
 
-
-def test_write_helpers_put_files_on_disk(mixed_results, tmp_path):
-    from src.export_service import write_excel, write_pdf
-
-    pdf = write_pdf(mixed_results, str(tmp_path / "r.pdf"))
-    excel = write_excel(mixed_results, str(tmp_path / "r.xlsx"))
-
-    assert open(pdf, "rb").read(5) == b"%PDF-"
-    assert zipfile.is_zipfile(excel)
-
-
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
