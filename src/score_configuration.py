@@ -124,8 +124,7 @@ FACTORS: Tuple[Factor, ...] = (
         items=(
             Item("WRK_1", "Staff having the required technical skills needed to use AI tools effectively."),
             Item("WRK_2", "We provide training opportunities to employees for AI-related skills."),
-            # See W3_NOTE below -- this item's polarity is a judgement call.
-            Item("WRK_3", "We have identified specific skill gaps that block AI adoption.", reverse=True),
+            Item("WRK_3", "We have identified specific skill gaps that block AI adoption."),
             Item("WRK_4", "Staff are generally open to use AI tools in their work."),
         ),
     ),
