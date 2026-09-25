@@ -759,7 +759,7 @@ def render_framework_comparison(report) -> None:
     What to show when the file is a dataset, but not this one.
 
     Scoring it is refused, and the reason is worth being straight about: the
-    7 factors are measured by 32 specific statements, and a dataset asking
+    seven factors are measured by 32 specific statements, and a dataset asking
     different questions measures different things. A number produced from it
     would look like a readiness score without being one.
 
