@@ -260,10 +260,10 @@ ITEM_ACTIONS: Dict[str, Tuple[str, str]] = {
         "workshops for capability building.",
     ),
     "WRK_3": (
-        "Skill gaps are identified as blocking adoption",
-        "Convert the known gaps into a written plan stating which roles need "
-        "which skills by when, and decide for each whether it will be met by "
-        "training, hiring or an external partner.",
+        "Skill gaps have not been identified",
+        "Run a short skills test: list the tasks the first AI case"
+        "involves, note who can do them today, and write down the gaps. Then"
+        "decide for each whether it will be met by training, hiring or an external partner.",
     ),
     "WRK_4": (
         "Staff are not open to using AI tools",
