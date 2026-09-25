@@ -7,8 +7,7 @@ a PDF report to read, or an Excel workbook to dig into.
 Everything here works in memory and returns bytes. That's deliberate -- the
 dashboard hands those bytes straight to a download button, and nothing ever
 touches the server's disk, which is what keeps the no-database, nothing-stored
-design intact. The write_pdf/write_excel helpers exist for testing and for
-running from the command line.
+design intact. 
 
 Note on what goes in the file: the export carries the company's answers and
 scores but no company name, contact details or anything else identifying,
@@ -237,6 +236,7 @@ def _radar_drawing(scores: List[Tuple[str, float]], colour: str,
         drawing.add(Line(centre, centre, end_x, end_y,
                          strokeColor=colors.HexColor("#E4E4E4"), strokeWidth=0.5))
 
+        ##label_x, label_y = point(index, 133)
         angle = (math.pi / 2) - (2 * math.pi * index / count)
         label_x = centre + (radius + 7) * math.cos(angle)
         label_y = centre + (radius + 7) * math.sin(angle)
@@ -565,11 +565,7 @@ def to_pdf_bytes(results: AssessmentResults) -> bytes:
     return buffer.getvalue()
 
 
-def write_pdf(results: AssessmentResults, path: str) -> str:
-    """Write the PDF report to disk. Returns the path."""
-    with open(path, "wb") as handle:
-        handle.write(to_pdf_bytes(results))
-    return path
+
 
 
 # ---------------------------------------------------------------------------
@@ -906,11 +902,7 @@ def to_excel_bytes(results: AssessmentResults) -> bytes:
     return buffer.getvalue()
 
 
-def write_excel(results: AssessmentResults, path: str) -> str:
-    """Write the Excel workbook to disk. Returns the path."""
-    with open(path, "wb") as handle:
-        handle.write(to_excel_bytes(results))
-    return path
+
 
 
 # ---------------------------------------------------------------------------
@@ -942,12 +934,6 @@ class ExportService:
 
     def to_excel(self, results: AssessmentResults) -> bytes:
         return to_excel_bytes(results)
-
-    def write_pdf(self, results: AssessmentResults, path: str) -> str:
-        return write_pdf(results, path)
-
-    def write_excel(self, results: AssessmentResults, path: str) -> str:
-        return write_excel(results, path)
 
     def filename(self, results: AssessmentResults, extension: str) -> str:
         return suggested_filename(results, extension)
