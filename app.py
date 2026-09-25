@@ -759,7 +759,7 @@ def render_framework_comparison(report) -> None:
     What to show when the file is a dataset, but not this one.
 
     Scoring it is refused, and the reason is worth being straight about: the
-    seven factors are measured by 32 specific statements, and a dataset asking
+    7 factors are measured by 32 specific statements, and a dataset asking
     different questions measures different things. A number produced from it
     would look like a readiness score without being one.
 
@@ -1099,7 +1099,7 @@ st.caption(
 with st.sidebar:
     st.header("About")
     st.write(
-        "This tool scores AI adoption readiness across seven factors using a questionnaire."
+        "This tool scores AI adoption readiness across 7 factors using a questionnaire."
     )
     st.write(f"**{len(cfg.FACTORS)} factors · {len(cfg.ALL_ITEMS)} questions**")
     st.divider()
