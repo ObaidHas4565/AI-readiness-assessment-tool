@@ -381,7 +381,7 @@ def to_pdf_bytes(results: AssessmentResults) -> bytes:
     shape_row = Table(
         [[shape, Paragraph(
             "<b>Profile shape</b><br/><br/>"
-            "An even shape means readiness is spread across the seven areas. "
+            "An even shape means readiness is spread across the 7 areas. "
             "A lopsided one means some areas are far ahead of others, which "
             "usually matters more than the overall number: adoption tends to "
             "be held back by the weakest area rather than helped by the "
