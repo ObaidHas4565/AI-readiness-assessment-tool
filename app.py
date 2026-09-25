@@ -24,6 +24,7 @@ from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from src import score_configuration as cfg
 from src.company_profile import CompanyProfile
@@ -78,6 +79,14 @@ SHORT_FACTOR_NAMES: Dict[str, str] = {
 # Display helpers
 # ---------------------------------------------------------------------------
 
+# Cards, bar tracks and chart lines use a see-through grey instead of a fixed
+# light colour. A fixed light card stayed light in dark mode while the text
+# inside it turned white, so the score card and the recommendations looked
+# empty. A see-through grey sits on whatever background the theme has.
+CARD = "rgba(128,128,128,0.08)"
+LINE = "rgba(128,128,128,0.35)"
+
+
 def band_colour(label: str) -> str:
     return "#" + BAND_COLOURS.get(label, "555555")
 
@@ -110,7 +119,7 @@ def evidence_html(rec, single: bool = False) -> str:
     )
     return (
         f"<div style='font-size:.78rem;color:#777;margin-top:8px;"
-        f"padding-top:6px;border-top:1px solid #E6E6E6'>"
+        f"padding-top:6px;border-top:1px solid {LINE}'>"
         f"<b>{lead}</b>{quotes}</div>"
     )
 
@@ -148,7 +157,7 @@ def render_written_answers(results) -> None:
     for question, answer in results.notes.items():
         st.markdown(f"**{esc(question)}**")
         st.markdown(
-            f"<div style='background:#FAFAFA;border-left:3px solid #E0E0E0;"
+            f"<div style='background:{CARD};border-left:3px solid {LINE};"
             f"padding:8px 12px;margin-bottom:8px;font-size:.9rem'>"
             f"{esc(answer)}</div>",
             unsafe_allow_html=True,
@@ -172,7 +181,7 @@ def score_bar(label: str, score: float, band: str, caption: Optional[str] = None
               <span style="opacity:.55;font-weight:400">{right}</span>
             </span>
           </div>
-          <div style="background:#E8E8E8;border-radius:3px;height:9px;margin-top:3px">
+          <div style="background:{LINE};border-radius:3px;height:9px;margin-top:3px">
             <div style="background:{band_colour(band)};width:{max(score, 0):.1f}%;
                         height:9px;border-radius:3px"></div>
           </div>
@@ -191,40 +200,56 @@ def radar(scores: Sequence[Tuple[str, float]], colour: str, size: int = 340) -> 
     not justify a fourth. It answers a different question from the bar chart:
     the bars rank the factors, this shows whether the profile is balanced or
     spiky.
+
+    The rings sit at 25, 50, 75 and 100, the same as the PDF and the Excel
+    workbook, so a point on a ring means the same score in all three.
     """
     if not scores:
         return
 
-    centre = size / 2
-    # Small charts sit in narrow columns, so the web needs to shrink to leave
-    # room for the labels around it -- otherwise "Governance" runs off the edge.
-    radius = size * (0.28 if size < 250 else 0.34)
+    # Extra room left and right, so long names like "Leadership" and
+    # "Governance" fit beside the chart instead of being cut off.
+    small = size < 250
+    side = size * (0.16 if small else 0.18)
+    width = size + 2 * side
+    centre_x, centre_y = width / 2, size / 2
+    # Small charts sit in narrow columns and get scaled down to fit, so the
+    # web is smaller and the text a touch larger to stay readable.
+    radius = size * (0.28 if small else 0.34)
     count = len(scores)
+    font = 11 if small else 10.5
+
+    def at(index: int, distance: float) -> Tuple[float, float]:
+        angle = (2 * math.pi * index / count) - (math.pi / 2)
+        return centre_x + distance * math.cos(angle), centre_y + distance * math.sin(angle)
 
     def point(index: int, value: float) -> Tuple[float, float]:
-        angle = (2 * math.pi * index / count) - (math.pi / 2)
-        distance = radius * max(0.0, min(100.0, value)) / 100.0
-        return centre + distance * math.cos(angle), centre + distance * math.sin(angle)
+        # Scores are kept inside 0-100 so a stray value can't draw off the web.
+        return at(index, radius * max(0.0, min(100.0, value)) / 100.0)
 
     rings = "".join(
-        f'<circle cx="{centre}" cy="{centre}" r="{radius * fraction:.1f}" '
-        f'fill="none" stroke="#E4E4E4" stroke-width="1"/>'
+        f'<circle cx="{centre_x:.1f}" cy="{centre_y:.1f}" r="{radius * fraction:.1f}" '
+        f'fill="none" stroke="{LINE}" stroke-width="1"/>'
         for fraction in (0.25, 0.5, 0.75, 1.0)
     )
 
     spokes, labels = "", ""
     for index, (name, _) in enumerate(scores):
         end_x, end_y = point(index, 100)
-        spokes += (f'<line x1="{centre}" y1="{centre}" x2="{end_x:.1f}" '
-                   f'y2="{end_y:.1f}" stroke="#E4E4E4" stroke-width="1"/>')
-        label_x, label_y = point(index, 124)
+        spokes += (f'<line x1="{centre_x:.1f}" y1="{centre_y:.1f}" x2="{end_x:.1f}" '
+                   f'y2="{end_y:.1f}" stroke="{LINE}" stroke-width="1"/>')
+        # The labels sit a fixed gap outside the outer ring. They used to be
+        # placed through point(), which caps everything at 100, so every name
+        # landed right on the end of its spoke.
+        label_x, label_y = at(index, radius + 12)
         anchor = "middle"
-        if label_x < centre - 12:
+        if label_x < centre_x - 12:
             anchor = "end"
-        elif label_x > centre + 12:
+        elif label_x > centre_x + 12:
             anchor = "start"
-        labels += (f'<text x="{label_x:.1f}" y="{label_y:.1f}" font-size="10.5" '
-                   f'fill="#666" text-anchor="{anchor}">{esc(name)}</text>')
+        labels += (f'<text x="{label_x:.1f}" y="{label_y:.1f}" font-size="{font}" '
+                   f'fill="currentColor" fill-opacity="0.75" text-anchor="{anchor}" '
+                   f'dominant-baseline="middle">{esc(name)}</text>')
 
     polygon = " ".join(
         f"{x:.1f},{y:.1f}" for x, y in
@@ -238,7 +263,8 @@ def radar(scores: Sequence[Tuple[str, float]], colour: str, size: int = 340) -> 
     st.markdown(
         f"""
         <div style="display:flex;justify-content:center">
-        <svg viewBox="0 0 {size} {size}" width="{size}" height="{size}"
+        <svg viewBox="0 0 {width:.0f} {size}" width="{width:.0f}"
+             style="max-width:100%;height:auto"
              xmlns="http://www.w3.org/2000/svg">
           {rings}{spokes}
           <polygon points="{polygon}" fill="{colour}" fill-opacity="0.22"
@@ -520,7 +546,40 @@ def submit() -> None:
     results = SCORING.score(profile)
     ADVICE.recommend(results)
     st.session_state["results"] = results
+    st.session_state["scroll_to_top"] = True
     st.rerun()
+
+
+def scroll_to_top_if_asked() -> None:
+    """
+    Jump back to the top of the page after the form is submitted or reset.
+
+    Streamlit keeps the scroll position when the page redraws, so pressing
+    "See my results" at the bottom of a long form left people looking at the
+    bottom of the results instead of the score. Streamlit has no scroll
+    command, so a tiny invisible script does it.
+    """
+    if not st.session_state.pop("scroll_to_top", False):
+        return
+    components.html(
+        """
+        <script>
+          const page = window.parent.document;
+          function toTop() {
+            for (const name of ['[data-testid="stMain"]', 'section.main',
+                                '[data-testid="stAppViewContainer"]']) {
+              const box = page.querySelector(name);
+              if (box) box.scrollTo(0, 0);
+            }
+            window.parent.scrollTo(0, 0);
+          }
+          toTop();
+          setTimeout(toTop, 150);
+          setTimeout(toTop, 400);
+        </script>
+        """,
+        height=0,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -532,7 +591,7 @@ def render_results(results) -> None:
 
     st.markdown(
         f"""
-        <div style="border-left:5px solid {colour};background:#F7F7F7;
+        <div style="border-left:5px solid {colour};background:{CARD};
                     padding:16px 18px;border-radius:4px">
           <div style="font-size:2.6rem;font-weight:700;line-height:1">
             {results.overall_score:.1f}<span style="font-size:1rem;opacity:.5">/100</span>
@@ -608,7 +667,7 @@ def render_results(results) -> None:
                 source += f" · {rec.triggered_by_item}"
             st.markdown(
                 f"""
-                <div style="border-left:3px solid {rec_colour};background:#FAFAFA;
+                <div style="border-left:3px solid {rec_colour};background:{CARD};
                             padding:10px 14px;margin-bottom:9px;border-radius:3px">
                   <span style="color:{rec_colour};font-weight:700;font-size:.85rem">
                     {index}. {esc(label)}</span>
@@ -648,6 +707,7 @@ def render_results(results) -> None:
     st.divider()
     if st.button("Start a new assessment"):
         reset_assessment()
+        st.session_state["scroll_to_top"] = True
         st.rerun()
 
 
@@ -908,7 +968,7 @@ def render_dataset(summary) -> None:
             label = SEVERITY_LABELS.get(rec.severity, rec.severity.title())
             st.markdown(
                 f"""
-                <div style="border-left:3px solid {colour};background:#FAFAFA;
+                <div style="border-left:3px solid {colour};background:{CARD};
                             padding:10px 14px;margin-bottom:9px;border-radius:3px">
                   <span style="color:{colour};font-weight:700;font-size:.85rem">
                     {index}. {esc(label)}</span>
@@ -1008,7 +1068,7 @@ def render_dataset(summary) -> None:
 
 def _radar_grid(groups) -> None:
     """Small multiples: one profile shape per country or sector."""
-    for start in range(0, (len(groups)), 3):
+    for start in range(0, len(groups), 3):
         columns = st.columns(3)
         for column, group in zip(columns, groups[start:start + 3]):
             with column:
@@ -1058,6 +1118,7 @@ with st.sidebar:
 assessment_tab, batch_tab = st.tabs(["Assessment", "Dataset"])
 
 with assessment_tab:
+    scroll_to_top_if_asked()
     results = st.session_state.get("results")
     if results is None:
         render_form()
