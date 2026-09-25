@@ -628,14 +628,14 @@ def render_results(results) -> None:
             for factor in results.strengths:
                 st.markdown(f"**{factor.name}** — {factor.score:.0f}/100")
         else:
-            st.caption("No factor reached the strength threshold of 70.")
+            st.caption("No factor reached the strength threshold of {cfg.STRENGTH_THRESHOLD:.0f}.")
     with right:
         st.subheader("Main barriers")
         if results.barriers:
             for factor in results.barriers:
                 st.markdown(f"**{factor.name}** — {factor.score:.0f}/100")
         else:
-            st.caption("No factor fell below the barrier threshold of 50.")
+            st.caption("No factor fell below the barrier threshold of {cfg.BARRIER_THRESHOLD:.0f}.")
 
     if results.item_barriers:
         st.subheader("Specific gaps")
