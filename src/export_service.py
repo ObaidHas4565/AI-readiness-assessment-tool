@@ -237,7 +237,9 @@ def _radar_drawing(scores: List[Tuple[str, float]], colour: str,
         drawing.add(Line(centre, centre, end_x, end_y,
                          strokeColor=colors.HexColor("#E4E4E4"), strokeWidth=0.5))
 
-        label_x, label_y = point(index, 133)
+        angle = (math.pi / 2) - (2 * math.pi * index / count)
+        label_x = centre + (radius + 7) * math.cos(angle)
+        label_y = centre + (radius + 7) * math.sin(angle)
         label = String(label_x, label_y - 2, name, fontSize=6.2,
                        fillColor=colors.HexColor("#666666"))
         if label_x < centre - 6:
@@ -780,6 +782,7 @@ def to_excel_bytes(results: AssessmentResults) -> bytes:
     shape.height, shape.width = 11, 11
     shape.y_axis.scaling.min = 0
     shape.y_axis.scaling.max = 100
+    shape.y_axis.majorUnit = 25
     factors.add_chart(shape, f"H{last + 3}")
 
     # --- Responses --------------------------------------------------------
@@ -1545,6 +1548,7 @@ def dataset_excel_bytes(summary: DatasetSummary) -> bytes:
     shape.add_data(values, titles_from_data=True)
     _label_chart(shape, short_labels, show_values=False, value_axis=False)
     shape.y_axis.scaling.min, shape.y_axis.scaling.max = 0, 100
+    shape.y_axis.majorUnit = 25
     shape.height, shape.width = 11, 11
     factors.add_chart(shape, f"H{last + 3}")
 
@@ -1631,6 +1635,7 @@ def dataset_excel_bytes(summary: DatasetSummary) -> bytes:
                 show_values=False, value_axis=False,
             )
             shape.y_axis.scaling.min, shape.y_axis.scaling.max = 0, 100
+            shape.y_axis.majorUnit = 25
             shape.height, shape.width = 12, 15
             sheet.add_chart(shape, f"L{chart_row}")
 
