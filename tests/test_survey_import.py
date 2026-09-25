@@ -145,7 +145,7 @@ def test_word_answers_score_identically_to_numbers():
     """
     The same responses written as words and as digits must land on the same
     score. Note this is not 75: "Agree" on a barrier-worded question means
-    less readiness, so the six reverse items pull it down. That's the scoring
+    less readiness, so the 5 reverse items pull it down. That's the scoring
     engine working, and it has to work the same from either input format.
     """
     words = import_survey(forms_csv(answer=4), "words.csv")
@@ -508,7 +508,7 @@ def test_meaning_matches_never_silently_fill_a_foreign_file():
 def test_the_readable_csv_this_tool_writes_can_be_read_back():
     """
     The readable export failed to import: its headers carry the factor name,
-    the item code and a [REVERSE-WORDED] tag, and the six barrier questions
+    the item code and a [REVERSE-WORDED] tag, and the 5 barrier questions
     were dropped over that tag alone. A tool that can't read its own output
     is not much of a tool.
     """
