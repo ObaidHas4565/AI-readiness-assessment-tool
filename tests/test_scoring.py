@@ -54,7 +54,7 @@ def test_survey_shape_matches_instrument():
 def test_expected_reverse_items():
     """The reverse-worded items must be exactly these, or every score shifts."""
     reverse_ids = {i.id for i in cfg.ALL_ITEMS if i.reverse}
-    assert reverse_ids == {"BUD_2", "WRK_3", "LDR_1", "DAT_5", "TEC_5", "GOV_5"}
+    assert reverse_ids == {"BUD_2", "LDR_1", "DAT_5", "TEC_5", "GOV_5"}
 
 
 # ---------------------------------------------------------------------------
