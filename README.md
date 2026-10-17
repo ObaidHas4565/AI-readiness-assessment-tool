@@ -10,9 +10,9 @@ generation for testing, the PDF/Excel export service, and the Streamlit
 dashboard.
 
 ## Files
-• src/score_configuration.py - stores the fixed constants the scoring engine relies (factors, weigths, questions, items, thresholds)
-• src/company_profile.py - holds user inputs and checks their validation
-• src/scoring_engine.py - weighted scoring of factor scores, overall score, readiness tier, strengths, barriers and gaps.
-• src/recommendation_engine.py - converts answers into recommended actions based on severity and ranking of the results.
-• src/assessment_results.py - displays the user's results, recommendations and export files.
-• app.py - the streamlit application
+ • src/score_configuration.py - stores the fixed constants the scoring engine relies (factors, weigths, questions, items, thresholds)
+ • src/company_profile.py - holds user inputs and checks their validation
+ • src/scoring_engine.py - weighted scoring of factor scores, overall score, readiness tier, strengths, barriers and gaps.
+ • src/recommendation_engine.py - converts answers into recommended actions based on severity and ranking of the results.
+ • src/assessment_results.py - displays the user's results, recommendations and export files.
+ • app.py - the streamlit application
