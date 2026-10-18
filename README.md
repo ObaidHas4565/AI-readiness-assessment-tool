@@ -1,15 +1,9 @@
 # AI Adoption Readiness Assessment Tool
 
-A tool that assesses a company's readiness for AI adoption across seven
-readiness factors, assigns a readiness tier, identifies strengths and barriers,
-and generates prioritised recommendations for the weaker areas.
+A tool that assesses a company's readiness for AI adoption across seven readiness factors (workforce, leadership, data, budget, technology, organizational culture, and governance). A user answers short questionnaire and gets a readiness score, assigns a readiness level, identifies strengths and barriers,
+and a list of prioritised recommendations for the weaker areas. Results can be download as a PDF or Excel file.
 
-All seven build steps are in place: the scoring configuration and input
-schema, the scoring engine, the recommendation engine, synthetic data
-generation for testing, the PDF/Excel export service, and the Streamlit
-dashboard.
-
-Live version: https://ai-readiness-assessment-tool-mnjgtm5zzkf4rdvnoevjfo.streamlit.app/
+#### Live version: https://ai-readiness-assessment-tool-mnjgtm5zzkf4rdvnoevjfo.streamlit.app/
 
 ## Project Structure
 - app.py - the streamlit application
@@ -24,7 +18,7 @@ Live version: https://ai-readiness-assessment-tool-mnjgtm5zzkf4rdvnoevjfo.stream
 - src/export_service.py - creates the downloadable PDF and Excel files. 
 - src/synthetic_data.py, generate_synthetic_data.py - generates a synthetic dataset for testing the tool's performance.
 - requirements.txt - installing the required libraries.
-- src/__init__.py - Makes src a package and exposes the main classes, so that they can imported from src directly.
+- src/_ _init_ _.py - Makes src a package and exposes the main classes, so that they can imported from src directly.
 - run_example.py - Scores 3 company profile examples from the command line.
 - conftest.py - an empty file that tells pytest where the project root is, so the tests can be imported from src.
 - tests/test_export_and_app.py - 37 tests for PDF and Excel contents and charts, dataset reports, and the dashboard.
@@ -34,3 +28,9 @@ Live version: https://ai-readiness-assessment-tool-mnjgtm5zzkf4rdvnoevjfo.stream
 - tests/test_text_analysis.py - 42 tests for written answers, non-answer filtering, and factor matching.
 - data/ - survey responses, synthetic dataset, and DATA_DICTIONARY.MD (explaination of each column in the synthetic dataset)
 
+## Limitations
+- Factors are equally weighted (1/7 to provide the same amount to the overall score) as a starting assumption, not a finalized result.
+- The tool's results may not be accurate as it was tested with a small survey dataset.
+- The tool does not determine the factor or factors that have the greatest influence on AI adoption.
+- The tool only covers 7 factors, does not include factors it is not familiar with.
+- The tool's recommendations may be too generic.
