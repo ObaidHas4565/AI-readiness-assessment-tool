@@ -24,7 +24,7 @@ The questionnaire has 32 questions across 7 factors answered on a 5-point agreem
 
 Recommendations come from the results, not the raw answers. Each factor gets an advice at one of three levels: critical (below 35), moderate (35-50), and refine (50 to 70). If the score is above 70, no recommendation is provided. Each question also has its own advice. Written answers influence the recommendations provided, but not the scoring.
 
-When an uploaded dataset only covers some of the 7 factors, the tool idenitifies the ones missing and can score the factors that are covered in the dataset.
+When an uploaded dataset only covers some of the 7 factors, the tool identifies the ones missing and scores the factors that are covered in the dataset.
 
 ## Project Structure
 - `app.py` - the streamlit application
@@ -72,8 +72,8 @@ The synthetic dataset exists to test the tool. It should not be read as evidence
 The tool does not ask for any sensitive information like a company's name or contact details and has no database. Results are kept in the browser session and disappear when the tab is closed or refreshed. PDF and Excel files are generated automatically from the results and are not saved on the server.
 
 ## Limitations
-- Factors are equally weighted (1/7 to provide the same amount to the overall score) as a starting assumption, not a finding.
-- The tool's results may not be accurate as it was tested with a small survey dataset.
-- The tool does not determine the factor or factors that have the greatest influence on AI adoption.
-- The tool only covers 7 factors, does not include factors it is not familiar with.
-- The tool's recommendations may be too generic and not company-specific.
+- Factors are weigthed equally (1/7 each) as a starting assumption, not as a finding.
+- The tool was tested with a small survey dataset, so its results may not be accurate.
+- The tool does not identify which factor or factors have the greatest influence on AI adoption.
+- The tool only covers 7 factors and does not account for other factors.
+- Recommendations are general and are not tailored to a specific company.
