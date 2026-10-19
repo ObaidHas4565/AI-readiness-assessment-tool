@@ -3,7 +3,7 @@
 A tool that assesses a company's readiness for AI adoption across seven readiness factors (workforce, leadership, data, budget, technology, organizational culture, and governance). A user answers a short questionnaire and gets a readiness score, assigns a readiness level, identifies strengths and barriers,
 and a list of prioritised recommendations for the weaker areas. 
 
-## How it works
+## What it does
 - Scores a company across 7 readiness factors: Budget, Workforce & Skills, Leadership, Data, Technology, Organizational Culture, and Governance.
 - Places a company in one of the 3 readiness levels based on the overall score: Emerging, Developing, and Advanced
 - List strengths, barriers, and specific questions where the company scored the lowest.
@@ -13,7 +13,7 @@ and a list of prioritised recommendations for the weaker areas.
 
 #### Live version: https://ai-readiness-assessment-tool-mnjgtm5zzkf4rdvnoevjfo.streamlit.app/
 
-## How the scoring works
+## How scoring works
 The questionnaire has 32 questions across 7 factors answered on a 5-point agreement scale, 5 company details (sector, country, years in operation, size, and current AI stage), and 3 optional written questions.
 
 1. 5 statements are worded negatively, so agreeing means the company is less ready. The answers are flipped, using 6 minus the answers, so a 5 becomes a 1.
