@@ -49,6 +49,21 @@ When an uploaded dataset only covers some of the 7 factors, the tool idenitifies
 - tests/test_text_analysis.py - 42 tests for written answers, non-answer filtering, and factor matching.
 - data/ - survey responses, synthetic dataset, and DATA_DICTIONARY.MD (explaination of each column in the synthetic dataset)
 
+## Running Locally
+
+You need Python and Git. From the project folder:
+```bash
+python -m venv .venv
+source .venv/Scripts/activate
+pip install -r requirements.txt
+pytest -v
+streamlit run app.py
+```
+
+`pytest -v' is optional, but it checks everything works before you start the app.
+
+The main libraries are Streamlit, ReportLab (PDF), openpxyl (Excel) and pytest.
+
 ## Limitations
 - Factors are equally weighted (1/7 to provide the same amount to the overall score) as a starting assumption, not a finding.
 - The tool's results may not be accurate as it was tested with a small survey dataset.
