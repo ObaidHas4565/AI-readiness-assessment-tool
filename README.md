@@ -60,7 +60,7 @@ pytest -v
 streamlit run app.py
 ```
 
-`pytest -v' is optional, but it checks everything works before you start the app.
+`pytest -v` is optional, but it checks everything works before you start the app.
 
 The main libraries are Streamlit, ReportLab (PDF), openpxyl (Excel) and pytest.
 
