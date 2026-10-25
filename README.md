@@ -53,7 +53,8 @@ When an uploaded dataset only covers some of the 7 factors, the tool identifies 
 You need Python and Git. From the project folder:
 ```bash
 python -m venv .venv
-source .venv/Scripts/activate
+source .venv/Scripts/activate # Windows/Git Bash
+source .venv/bin/activaye # macOS/Linux
 pip install -r requirements.txt
 pytest -v
 streamlit run app.py
@@ -61,7 +62,7 @@ streamlit run app.py
 
 `pytest -v` is optional, but it checks everything works before you start the app.
 
-The main libraries are Streamlit, ReportLab (PDF), openpxyl (Excel) and pytest.
+The main libraries are Streamlit, ReportLab (PDF), openpyxl (Excel) and pytest.
 
 ## Data
 The `data/` folder holds the survey responses collected through Google Forms, a dataset from Zenodo, and the synthetic dataset created by the `generate_synthetic_data.py`. `DATA_DICTIONARY.md` describes the synthetic columns.
@@ -72,8 +73,11 @@ The synthetic dataset exists to test the tool. It should not be read as evidence
 The tool does not ask for any sensitive information like a company's name or contact details and has no database. Results are kept in the browser session and disappear when the tab is closed or refreshed. PDF and Excel files are generated automatically from the results and are not saved on the server.
 
 ## Limitations
-- Factors are weigthed equally (1/7 each) as a starting assumption, not as a finding.
-- The tool was tested with a small survey dataset, so its results may not be accurate.
+- Factors are weighted equally (1/7 each) as a starting assumption, not as a finding.
+- The tool was tested with a small survey dataset of 17 responses, so its results may not be accurate.
 - The tool does not identify which factor or factors have the greatest influence on AI adoption.
 - The tool only covers 7 factors and does not account for other factors.
 - Recommendations are general and are not tailored to a specific company.
+
+## Context
+Disertation: AI Adoption Readiness Assessment Tool, MSc in Data Science, Middlesex University Dubai, 2026
