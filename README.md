@@ -3,6 +3,10 @@
 A tool that assesses a company's readiness for AI adoption across seven readiness factors (workforce, leadership, data, budget, technology, organizational culture, and governance). A user answers a short questionnaire and gets a readiness score, assigns a readiness level, identifies strengths and barriers,
 and a list of prioritised recommendations for the weaker areas. 
 
+## Why I build this tool
+
+This is my MSc Data Science dissertation project at Middlesex University Dubai (2026). It is aimed to assist companies, especially small-to-medium-sized enterprises (SMEs), in identifying their readiness level for AI adoption. This is a prototype. The scoring logic is covered by 227 tests, and the limitations are listed near the end of this page.
+
 ## What it does
 - Scores a company across 7 readiness factors: Budget, Workforce & Skills, Leadership, Data, Technology, Organizational Culture, and Governance.
 - Places a company in one of the 3 readiness levels based on the overall score: Emerging, Developing, and Advanced
@@ -11,7 +15,8 @@ and a list of prioritised recommendations for the weaker areas.
 - Accepts an uploaded CSV or Excel dataset and shows the results for the whole group, including a breakdown by sector and country.
 - Exports both results as either Excel or PDF file.
 
-#### Live version: https://ai-readiness-assessment-tool-mnjgtm5zzkf4rdvnoevjfo.streamlit.app/
+#### Try the live demo: https://ai-readiness-assessment-tool-mnjgtm5zzkf4rdvnoevjfo.streamlit.app/
+(The app run on Streamlit's free hosting, so it may take a short while to start if nobody has used it recently.)
 
 ## How scoring works
 The questionnaire has 32 questions across 7 factors answered on a 5-point agreement scale, 5 company details (sector, country, years in operation, size, and current AI stage), and 3 optional written questions.
@@ -22,9 +27,17 @@ The questionnaire has 32 questions across 7 factors answered on a 5-point agreem
 4. The overall score gives the readiness level: Emerging (below 40), Developing (40 to 70) or Advanced (70 and above).
 5. A factor at 70 or above counts as strength. A factor below 50 counts as a barrier.
 
-Recommendations come from the results, not the raw answers. Each factor gets an advice at one of three levels: critical (below 35), moderate (35-50), and refine (50 to 70). If the score is above 70, no recommendation is provided. Each question also has its own advice. Written answers influence the recommendations provided, but not the scoring.
+### Recommendations
 
-When an uploaded dataset only covers some of the 7 factors, the tool identifies the ones missing and scores the factors that are covered in the dataset.
+Recommendations are based on barriers and gaps, not on the raw answers. Each weak factor gets an advice at one of the 3 severity levels:
+
+- Critical: below 35
+- Moderate: 35 to below 50
+- Refine: 50 to below 70
+
+Factors scoring 70 or above get no recommendation. Individual questions also have their own advice. The written answers can change which recommendations appear, but they do not change the score.
+
+If an uploaded dataset covers only some of the 7 factors, the tool lists the missing ones and scores the rest.
 
 ## Project Structure
 - `app.py` - the streamlit application
@@ -53,31 +66,36 @@ When an uploaded dataset only covers some of the 7 factors, the tool identifies 
 You need Python and Git. From the project folder:
 ```bash
 python -m venv .venv
-source .venv/Scripts/activate # Windows/Git Bash
-source .venv/bin/activaye # macOS/Linux
+
+# Windows/Git Bash
+source .venv/Scripts/activate
+# macOS/Linux
+source .venv/bin/activate
+
 pip install -r requirements.txt
-pytest -v
+python generate_synthetic_data.py #optional: creates the synthetic dataset for testing
+pytest -v # optional: checks everything works before you start the app.
 streamlit run app.py
 ```
 
-`pytest -v` is optional, but it checks everything works before you start the app.
 
 The main libraries are Streamlit, ReportLab (PDF), openpyxl (Excel) and pytest.
 
 ## Data
-The `data/` folder holds the survey responses collected through Google Forms, a dataset from Zenodo, and the synthetic dataset created by the `generate_synthetic_data.py`. `DATA_DICTIONARY.md` describes the synthetic columns.
+The `data/` folder holds the `DATA_DICTIONARY.md`, which describes the columns in the synthetic dataset. The synthetic dataset is not stored in the repository. Generate it locally with 'python generate_synthetic_data,py'.
 
 The synthetic dataset exists to test the tool. It should not be read as evidence about real companies.
 
 ## Privacy
 The tool does not ask for any sensitive information like a company's name or contact details and has no database. Results are kept in the browser session and disappear when the tab is closed or refreshed. PDF and Excel files are generated automatically from the results and are not saved on the server.
 
+## Basis for the factors and thresholds
+
+The 7 factors come from research articles of AI readiness and maturity models, especially TOE, MRADA, AIMAA. The thresholds (40 and 70 for readiness levels, and 35 to 50 for barriers and severity) are based on assumption for this prototype. They are not taken from a published framework.
+
 ## Limitations
-- Factors are weighted equally (1/7 each) as a starting assumption, not as a finding.
+- All factors are weighted equally (1/7 each). This is a starting assumption, not as a finding.
 - The tool was tested with a small survey dataset of 17 responses, so its results may not be accurate.
 - The tool does not identify which factor or factors have the greatest influence on AI adoption.
 - The tool only covers 7 factors and does not account for other factors.
 - Recommendations are general and are not tailored to a specific company.
-
-## Context
-Disertation: AI Adoption Readiness Assessment Tool, MSc in Data Science, Middlesex University Dubai, 2026
