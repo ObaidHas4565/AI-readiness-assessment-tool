@@ -1,9 +1,12 @@
 # AI Adoption Readiness Assessment Tool
 
+[Try the live demo](https://ai-readiness-assessment-tool-mnjgtm5zzkf4rdvnoevjfo.streamlit.app/)
+(The app runs on Streamlit's free hosting, so it may take a short while to start if nobody has used it recently.) 
+
 A tool that assesses a company's readiness for AI adoption across seven readiness factors (workforce, leadership, data, budget, technology, organizational culture, and governance). A user answers a short questionnaire and gets a readiness score, assigns a readiness level, identifies strengths and barriers,
 and a list of prioritised recommendations for the weaker areas. 
 <img width="1916" height="807" alt="image" src="https://github.com/user-attachments/assets/0b789e50-481f-4f82-924c-faf5274503e8" />
-<img width="1916" height="1400" alt="image" src="https://github.com/user-attachments/assets/0a873942-1549-4726-9f5a-7ea25bfd5966" />
+<img width="1916" height="1250" alt="image" src="https://github.com/user-attachments/assets/0a873942-1549-4726-9f5a-7ea25bfd5966" />
 
 
 ## Why I build this tool
@@ -13,12 +16,12 @@ This is my MSc Data Science dissertation project at Middlesex University Dubai (
 ## What it does
 - Scores a company across 7 readiness factors: Budget, Workforce & Skills, Leadership, Data, Technology, Organizational Culture, and Governance.
 - Places a company in one of the 3 readiness levels based on the overall score: Emerging, Developing, and Advanced
-- List strengths, barriers, and specific questions where the company scored the lowest.
+- Lists strengths, barriers, and specific questions where the company scored the lowest.
 - Provides recommended actions for each weak area, ordered by how much improving them will improve the overall score.
 - Accepts an uploaded CSV or Excel dataset and shows the results for the whole group, including a breakdown by sector and country.
 - Exports both results as either Excel or PDF file.
 
-**[Try the live demo](https://ai-readiness-assessment-tool-mnjgtm5zzkf4rdvnoevjfo.streamlit.app/)
+[Try the live demo](https://ai-readiness-assessment-tool-mnjgtm5zzkf4rdvnoevjfo.streamlit.app/)
 (The app run on Streamlit's free hosting, so it may take a short while to start if nobody has used it recently.)
 
 ## How scoring works
@@ -32,7 +35,7 @@ The questionnaire has 32 questions across 7 factors answered on a 5-point agreem
 
 ### Recommendations
 
-Recommendations are based on barriers and gaps, not on the raw answers. Each weak factor gets an advice at one of the 3 severity levels:
+Recommendations are based on barriers and gaps, not on the raw answers. Each weak factor gets advice at one of the 3 severity levels:
 
 - Critical: below 35
 - Moderate: 35 to below 50
@@ -103,13 +106,13 @@ The tool does not ask for any sensitive information like a company's name or con
 
 ## Basis for the factors and thresholds
 
-The 7 factors come from research articles of AI readiness and maturity models like TOE, MRADA, or AIMAA frameworks. The thresholds (40 and 70 for readiness levels, and 35 to 50 for barriers and severity) are based on assumption for this prototype. They are not taken from a published framework.
+The 7 factors come from research articles of AI readiness and maturity models like TOE, MDARA, or AIMAA frameworks. The thresholds (40 and 70 for readiness levels, and 35 to 50 for barriers and severity) are based on assumption for this prototype. They are not taken from a published framework.
 
 ## Testing and early results
 
-The tool was tested with 17 survey responses and synthetic dataset. At this size, the results show that the scoring and recommendation logic behaves as designed. They do not show how accurately the tool predicts real AI adoption outcomes.
+The tool was tested with 17 survey responses and a synthetic dataset. At this size, the results show that the scoring and recommendation logic behaves as designed. They do not show how accurately the tool predicts real AI adoption outcomes.
 
-The tool was used by 10 testers and met all requirements related to privacy, reliability, performance, availability, and maintainability. User feedback indicated good usability, usefulness, trust, accuracy and satisfaction. However, the main concern was the recommendations: 5/10 respondents felt that the suggested actions may be too generic.
+The tool checked against its functional and non-functional requirements. Performance was maeaured with a timing script (meauwas used by 10 testers and met all requirements related to privacy, reliability, performance, availability, and maintainability. User feedback indicated good usability, usefulness, trust, accuracy and satisfaction. However, the main concern was the recommendations: 5/10 respondents felt that the suggested actions may be too generic.
 
 
 ## Limitations and next steps
@@ -118,5 +121,5 @@ The tool was used by 10 testers and met all requirements related to privacy, rel
 - The tool does not identify which factor or factors have the greatest influence on AI adoption. Adjusting the weights would be the first step toward answering that.
 - The thresholds are based on assumption. They can be adjusted by checking with published data on how companies score in practice, and ask experts to review them.
 - The tool only covers 7 factors. Other frameworks may point to factors that are missing here.
-- Recommendations are general and are not tailored to a specific company. Sector-specifc advice would be aq useful addition.
+- Recommendations are general and are not tailored to a specific company. Sector-specific advice would be a useful addition.
 - The synthetic dataset is for testing performance only. The scoring should be checked against more real responses.
