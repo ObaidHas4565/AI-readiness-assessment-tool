@@ -22,7 +22,7 @@ This is my MSc Data Science dissertation project at Middlesex University Dubai (
 - Exports both results as either Excel or PDF file.
 
 [Try the live demo](https://ai-readiness-assessment-tool-mnjgtm5zzkf4rdvnoevjfo.streamlit.app/)
-(The app run on Streamlit's free hosting, so it may take a short while to start if nobody has used it recently.)
+(The app runs on Streamlit's free hosting, so it may take a short while to start if nobody has used it recently.)
 
 ## How scoring works
 The questionnaire has 32 questions across 7 factors answered on a 5-point agreement scale, 5 company details (sector, country, years in operation, size, and current AI stage), and 3 optional written questions.
@@ -112,7 +112,7 @@ The 7 factors come from research articles of AI readiness and maturity models li
 
 The tool was tested with 17 survey responses and a synthetic dataset. At this size, the results show that the scoring and recommendation logic behaves as designed. They do not show how accurately the tool predicts real AI adoption outcomes.
 
-The tool checked against its functional and non-functional requirements. Performance was maeaured with a timing script (meauwas used by 10 testers and met all requirements related to privacy, reliability, performance, availability, and maintainability. User feedback indicated good usability, usefulness, trust, accuracy and satisfaction. However, the main concern was the recommendations: 5/10 respondents felt that the suggested actions may be too generic.
+The tool checked against its functional and non-functional requirements. Functional requirements were confirmed by 227 automated tests and by using the tool directly. Performance was measured with a stopwatch and a timing script (measure_performance.py), and the tool displayed the results within 10 seconds. Reliability was checked by running the same inputs from the dataset tab and the assessment from, which gave the same results each time. Availability was confirmed through the public Streamlit link. 10 people tried the tool and completed a feedback questionnaire. Their responses were positive about ease of use, trust, usefulenss, and overall satisfaction. However, the main concern was the recommendations: 5/10 respondents felt that the suggested actions may be too generic, and a few found them to be unclear or not suited to their company's situation.
 
 
 ## Limitations and next steps
