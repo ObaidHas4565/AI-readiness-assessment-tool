@@ -5,7 +5,7 @@
 
 A tool that assesses a company's readiness for AI adoption across seven readiness factors (workforce, leadership, data, budget, technology, organizational culture, and governance). A user answers a short questionnaire and gets a readiness score, assigns a readiness level, identifies strengths and barriers,
 and a list of prioritized recommendations for the weaker areas. 
-<img width="1916" height="807" alt="image" src="https://github.com/user-attachments/assets/0b789e50-481f-4f82-924c-faf5274503e8" />
+<img width="1916" height="1500" alt="image" src="https://github.com/user-attachments/assets/0b789e50-481f-4f82-924c-faf5274503e8" />
 <img width="1916" height="1500" alt="image" src="https://github.com/user-attachments/assets/0a873942-1549-4726-9f5a-7ea25bfd5966" />
 
 
