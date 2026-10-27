@@ -4,25 +4,22 @@
 (The app runs on Streamlit's free hosting, so it may take a short while to start if nobody has used it recently.) 
 
 A tool that assesses a company's readiness for AI adoption across seven readiness factors (workforce, leadership, data, budget, technology, organizational culture, and governance). A user answers a short questionnaire and gets a readiness score, assigns a readiness level, identifies strengths and barriers,
-and a list of prioritised recommendations for the weaker areas. 
+and a list of prioritized recommendations for the weaker areas. 
 <img width="1916" height="807" alt="image" src="https://github.com/user-attachments/assets/0b789e50-481f-4f82-924c-faf5274503e8" />
 <img width="1916" height="1250" alt="image" src="https://github.com/user-attachments/assets/0a873942-1549-4726-9f5a-7ea25bfd5966" />
 
 
-## Why I build this tool
+## Why I built this tool
 
-This is my MSc Data Science dissertation project at Middlesex University Dubai (2026). It is aimed to assist companies, especially small-to-medium-sized enterprises (SMEs), in identifying their readiness level for AI adoption. This is a prototype. The scoring logic is covered by 227 tests, and the limitations are listed near the end of this page.
+This is my MSc Data Science dissertation project at Middlesex University Dubai (2026). It is aimed at helping companies, especially small-to-medium-sized enterprises (SMEs), in identifying their readiness level for AI adoption. This is a prototype. The tool's functionalities are covered by 227 automated tests, and the limitations are listed near the end of this page.
 
 ## What it does
 - Scores a company across 7 readiness factors: Budget, Workforce & Skills, Leadership, Data, Technology, Organizational Culture, and Governance.
 - Places a company in one of the 3 readiness levels based on the overall score: Emerging, Developing, and Advanced
-- Lists strengths, barriers, and specific questions where the company scored the lowest.
-- Provides recommended actions for each weak area, ordered by how much improving them will improve the overall score.
+- Lists strengths, barriers, and specific questions where the company has the lowest scores.
+- Provides recommended actions for each weak area, ordered by how much improving them will increase the overall score.
 - Accepts an uploaded CSV or Excel dataset and shows the results for the whole group, including a breakdown by sector and country.
-- Exports both results as either Excel or PDF file.
-
-[Try the live demo](https://ai-readiness-assessment-tool-mnjgtm5zzkf4rdvnoevjfo.streamlit.app/)
-(The app runs on Streamlit's free hosting, so it may take a short while to start if nobody has used it recently.)
+- Exports both results as an Excel or PDF file.
 
 ## How scoring works
 The questionnaire has 32 questions across 7 factors answered on a 5-point agreement scale, 5 company details (sector, country, years in operation, size, and current AI stage), and 3 optional written questions.
@@ -91,7 +88,7 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 python generate_synthetic_data.py # optional: creates the synthetic dataset for testing
-pytest -v # optional: checks everything works before you start the app.
+pytest -v # optional: checks everything works before you start the app
 streamlit run app.py
 ```
 
@@ -100,7 +97,7 @@ The main libraries are Streamlit, ReportLab (PDF), openpyxl (Excel) and pytest.
 ## Data
 The `data/` folder holds the `DATA_DICTIONARY.md`, which describes the columns in the synthetic dataset. The synthetic dataset is not stored in the repository. Generate it locally with 'python generate_synthetic_data.py'.
 
-The synthetic dataset exists to test the tool. It should not be read as evidence about real companies.
+The synthetic dataset exists to test the tool's performance. It should not be read as evidence about real companies.
 
 ## Privacy
 The tool does not ask for any sensitive information like a company's name or contact details and has no database. Results are kept in the browser session and disappear when the tab is closed or refreshed. PDF and Excel files are generated automatically from the results and are not saved on the server.
