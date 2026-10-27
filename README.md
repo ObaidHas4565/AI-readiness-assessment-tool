@@ -27,7 +27,7 @@ This is my MSc Data Science dissertation project at Middlesex University Dubai (
 ## How scoring works
 The questionnaire has 32 questions across 7 factors answered on a 5-point agreement scale, 5 company details (sector, country, years in operation, size, and current AI stage), and 3 optional written questions.
 
-1. 5 statements are worded negatively, so agreeing means the company is less ready. The answers are flipped, using 6 minus the answers, so a 5 becomes a 1.
+1. 5 statements are worded negatively, so agreeing means the company is less ready. The answers are flipped, using 6 minus the answer, so a 5 becomes a 1.
 2. The answers for each factor are averaged and rescaled to a score from 0 to 100.
 3. The 7 factor scores are combined using the factor weights.
 4. The overall score gives the readiness level: Emerging (below 40), Developing (40 to below 70) or Advanced (70 and above).
@@ -69,6 +69,7 @@ Inputs are checked before scoring, and incomplete or out-of-range entries are re
 - `src/__init__.py`: Makes src a package and exposes the main classes, so that they can imported from src directly.
 - `run_example.py`: Scores 3 company profile examples from the command line.
 - `conftest.py`: an empty file that tells pytest where the project root is, so the tests can be imported from src.
+- `measure_performance.py`: measures the tool's speed performance in generating the results within 10 seconds.
 - `tests/test_export_and_app.py`: 37 tests for PDF and Excel contents and charts, dataset reports, and the dashboard.
 - `tests/test_scoring.py`: 37 tests for configuration, scoring, levels, strengths, barriers, validation and recommendations.
 - `tests/test_survey_import.py`: 92 tests for CSV and Excel uploads, answer formats, sector and country checks, and partial scoring.
@@ -97,7 +98,7 @@ streamlit run app.py
 The main libraries are Streamlit, ReportLab (PDF), openpyxl (Excel) and pytest.
 
 ## Data
-The `data/` folder holds the `DATA_DICTIONARY.md`, which describes the columns in the synthetic dataset. The synthetic dataset is not stored in the repository. Generate it locally with 'python generate_synthetic_data,py'.
+The `data/` folder holds the `DATA_DICTIONARY.md`, which describes the columns in the synthetic dataset. The synthetic dataset is not stored in the repository. Generate it locally with 'python generate_synthetic_data.py'.
 
 The synthetic dataset exists to test the tool. It should not be read as evidence about real companies.
 
@@ -106,20 +107,22 @@ The tool does not ask for any sensitive information like a company's name or con
 
 ## Basis for the factors and thresholds
 
-The 7 factors come from research articles of AI readiness and maturity models like TOE, MDARA, or AIMAA frameworks. The thresholds (40 and 70 for readiness levels, and 35 to 50 for barriers and severity) are based on assumption for this prototype. They are not taken from a published framework.
+The 7 factors come from research articles on AI readiness and maturity models like TOE, MDARA, or AIMAA frameworks. The thresholds (40 and 70 for readiness levels, and 35 and 50 for barriers and severity) are based on my own assumptions for this prototype. They are not taken from a published framework.
 
 ## Testing and early results
 
 The tool was tested with 17 survey responses and a synthetic dataset. At this size, the results show that the scoring and recommendation logic behaves as designed. They do not show how accurately the tool predicts real AI adoption outcomes.
 
-The tool checked against its functional and non-functional requirements. Functional requirements were confirmed by 227 automated tests and by using the tool directly. Performance was measured with a stopwatch and a timing script (measure_performance.py), and the tool displayed the results within 10 seconds. Reliability was checked by running the same inputs from the dataset tab and the assessment from, which gave the same results each time. Availability was confirmed through the public Streamlit link. 10 people tried the tool and completed a feedback questionnaire. Their responses were positive about ease of use, trust, usefulenss, and overall satisfaction. However, the main concern was the recommendations: 5/10 respondents felt that the suggested actions may be too generic, and a few found them to be unclear or not suited to their company's situation.
+The tool was checked against its functional and non-functional requirements. Functional requirements were confirmed by 227 automated tests and by using the tool directly. Performance was measured with a stopwatch and a timing script (measure_performance.py), and the tool displayed the results within 10 seconds. Reliability was checked by running the same inputs from the dataset tab and the assessment form, which gave the same results each time. Availability was confirmed through the public Streamlit link. 
+
+10 people tried the tool and completed a feedback questionnaire. Their responses were positive about ease of use, trust, usefulenss, and overall satisfaction. However, the main concern was the recommendations: 5/10 respondents felt that the suggested actions may be too generic, and a few found them to be unclear or not suited to their company's situation.
 
 
 ## Limitations and next steps
-- All factors are weighted equally (1/7 each). This is a starting assumption, not as a finding. The next step is to derive the weights from the survey data, for example by relating factor scores to current AI stage once the sample is larger.
+- All factors are weighted equally (1/7 each). This is a starting assumption, not a finding. The next step is to derive the weights from the survey data, for example by relating factor scores to current AI stage once the sample is larger.
 - The sample is small (17 responses). More responses would allow the weight and threshold analysis to be repeated with more confidence.
 - The tool does not identify which factor or factors have the greatest influence on AI adoption. Adjusting the weights would be the first step toward answering that.
-- The thresholds are based on assumption. They can be adjusted by checking with published data on how companies score in practice, and ask experts to review them.
+- The thresholds are based on assumption. They could be checked against published data on how companies score in practice, and experts could review them.
 - The tool only covers 7 factors. Other frameworks may point to factors that are missing here.
 - Recommendations are general and are not tailored to a specific company. Sector-specific advice would be a useful addition.
 - The synthetic dataset is for testing performance only. The scoring should be checked against more real responses.
