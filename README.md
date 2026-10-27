@@ -46,7 +46,7 @@ If an uploaded dataset covers only some of the 7 factors, the tool lists the mis
 
 Input → Scoring engine → Recommendation engine → Export
 
-Inputs are checked before scoring, and incomplete or out-of-range entries are rejected. Scoring, recommendations, import, and export are kept in separate modules. The fixed scoring constants (weights and thresholds) live in their own file, so they can be changed without editing the application logic. 
+Inputs are checked before scoring, and incomplete or out-of-range entries are rejected. Each company's factor scores and overall score are calculated from its own answers and its own weights, so the same input always gives the same result. Scoring, recommendations, import, and export are kept in separate modules. The fixed scoring constants (weights and thresholds) live in their own file, so they can be changed without editing the application logic. 
 
 <details>
 <summary><strong> Project Structure </strong></summary>
@@ -108,18 +108,18 @@ The 7 factors come from research articles on AI readiness and maturity models li
 
 ## Testing and early results
 
-The tool was tested with 17 survey responses and a synthetic dataset. At this size, the results show that the scoring and recommendation logic behaves as designed. They do not show how accurately the tool predicts real AI adoption outcomes.
-
 The tool was checked against its functional and non-functional requirements. Functional requirements were confirmed by 227 automated tests and by using the tool directly. Performance was measured with a stopwatch and a timing script (measure_performance.py), and the tool displayed the results within 10 seconds. Reliability was checked by running the same inputs from the dataset tab and the assessment form, which gave the same results each time. Availability was confirmed through the public Streamlit link. 
 
-10 people tried the tool and completed a feedback questionnaire. Their responses were positive about ease of use, trust, usefulenss, and overall satisfaction. However, the main concern was the recommendations: 5/10 respondents felt that the suggested actions may be too generic, and a few found them to be unclear or not suited to their company's situation.
+<strong>Scoring Dataset</strong> - The tool was tested with 17 survey responses and a synthetic dataset. At this size, the results show that the scoring and recommendation logic behaves as designed. They do not show how accurately the tool predicts real AI adoption outcomes.
+
+<strong>Usability Feedback</strong> - 10 people tried the tool and completed a feedback questionnaire. Their responses were positive about ease of use, trust, usefulenss, and overall satisfaction. However, the main concern was the recommendations: 5/10 respondents felt that the suggested actions may be too generic, and a few found them to be unclear or not suited to their company's situation.
 
 
 ## Limitations and next steps
 - All factors are weighted equally (1/7 each). This is a starting assumption, not a finding. The next step is to derive the weights from the survey data, for example by relating factor scores to current AI stage once the sample is larger.
-- The sample is small (17 responses). More responses would allow the weight and threshold analysis to be repeated with more confidence.
+- The sample dataset is small (17 responses). More responses would allow the weight and threshold analysis to be repeated with more confidence.
 - The tool does not identify which factor or factors have the greatest influence on AI adoption. Adjusting the weights would be the first step toward answering that.
-- The thresholds are based on assumption. They could be checked against published data on how companies score in practice, and experts could review them.
+- The thresholds are based on assumptions. They could be checked against published data on how companies score in practice, and experts could review them.
 - The tool only covers 7 factors. Other frameworks may point to factors that are missing here.
 - Recommendations are general and are not tailored to a specific company. Sector-specific advice would be a useful addition.
-- The synthetic dataset is for testing performance only. The scoring should be checked against more real responses.
+- The synthetic dataset is for testing only. The scoring should be checked against more real responses.
